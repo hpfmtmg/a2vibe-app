@@ -1,5 +1,11 @@
 {
-  "events": [],
+  "events": [
+    {
+      "id": "fb279ded-62f1-4c8f-a42e-49a94b2fa3fb",
+      "date": "2025-04-08",
+      "name": "April mtg"
+    }
+  ],
   "rsvps": [
     {
       "id": "cf201c24-ac41-41fb-90fe-1fcfe5b375a8",
