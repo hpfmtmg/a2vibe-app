@@ -1,101 +1,290 @@
-import Image from "next/image";
+"use client"
+
+import { useState, useEffect } from "react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { EventForm } from "@/components/event-form"
+import { RsvpForm } from "@/components/rsvp-form"
+import { EventList } from "@/components/event-list"
+import { RecipeUpload } from "@/components/recipe-upload"
+import { SharedContentUpload } from "@/components/shared-content-upload"
+import type { Event, Rsvp, Recipe, SharedContent } from "@/lib/types"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { CalendarWidget } from "@/components/calendar-widget"
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [events, setEvents] = useState<Event[]>([])
+  const [rsvps, setRsvps] = useState<Rsvp[]>([])
+  const [recipes, setRecipes] = useState<Recipe[]>([])
+  const [sharedContent, setSharedContent] = useState<SharedContent[]>([])
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+  const [editingRsvp, setEditingRsvp] = useState<Rsvp | null>(null)
+  const [loading, setLoading] = useState({
+    events: true,
+    rsvps: true,
+    recipes: true,
+    sharedContent: true,
+  })
+  const [error, setError] = useState<string | null>(null)
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  // Fetch initial data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch events
+        const eventsRes = await fetch("/api/events")
+        if (!eventsRes.ok) {
+          throw new Error(`Events API error: ${eventsRes.status}`)
+        }
+        const eventsData = await eventsRes.json()
+        setEvents(eventsData)
+        setLoading((prev) => ({ ...prev, events: false }))
+
+        // Fetch RSVPs
+        const rsvpsRes = await fetch("/api/rsvps")
+        if (!rsvpsRes.ok) {
+          throw new Error(`RSVPs API error: ${rsvpsRes.status}`)
+        }
+        const rsvpsData = await rsvpsRes.json()
+        setRsvps(rsvpsData)
+        setLoading((prev) => ({ ...prev, rsvps: false }))
+
+        // Fetch recipes
+        const recipesRes = await fetch("/api/recipes")
+        if (!recipesRes.ok) {
+          throw new Error(`Recipes API error: ${recipesRes.status}`)
+        }
+        const recipesData = await recipesRes.json()
+        setRecipes(recipesData)
+        setLoading((prev) => ({ ...prev, recipes: false }))
+
+        // Fetch shared content
+        const contentRes = await fetch("/api/shared-content")
+        if (!contentRes.ok) {
+          throw new Error(`Shared Content API error: ${contentRes.status}`)
+        }
+        const contentData = await contentRes.json()
+        setSharedContent(contentData)
+        setLoading((prev) => ({ ...prev, sharedContent: false }))
+      } catch (error) {
+        console.error("Error fetching data:", error)
+        setError(error instanceof Error ? error.message : "Failed to load data")
+        setLoading({ events: false, rsvps: false, recipes: false, sharedContent: false })
+      }
+    }
+
+    fetchData()
+  }, [])
+
+  const handleAddEvent = async (event: Event) => {
+    try {
+      const response = await fetch("/api/events", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(event),
+      })
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+
+      setEvents([...events, event])
+    } catch (error) {
+      console.error("Error adding event:", error)
+      alert("Failed to add event. Please try again.")
+    }
+  }
+
+  const handleAddRsvp = async (rsvp: Rsvp) => {
+    try {
+      const response = await fetch("/api/rsvps", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(rsvp),
+      })
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+
+      if (editingRsvp) {
+        // Update existing RSVP
+        setRsvps(rsvps.map((r) => (r.id === editingRsvp.id ? rsvp : r)))
+        setEditingRsvp(null)
+      } else {
+        // Add new RSVP
+        setRsvps([...rsvps, rsvp])
+      }
+    } catch (error) {
+      console.error("Error adding RSVP:", error)
+      alert("Failed to save RSVP. Please try again.")
+    }
+  }
+
+  const handleEditRsvp = (rsvp: Rsvp) => {
+    setEditingRsvp(rsvp)
+    setSelectedEvent(events.find((e) => e.id === rsvp.eventId) || null)
+  }
+
+  const handleDeleteRsvp = async (id: string) => {
+    try {
+      const response = await fetch(`/api/rsvps?id=${id}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+
+      setRsvps(rsvps.filter((rsvp) => rsvp.id !== id))
+    } catch (error) {
+      console.error("Error deleting RSVP:", error)
+      alert("Failed to delete RSVP. Please try again.")
+    }
+  }
+
+  const handleAddRecipe = async (recipe: Recipe) => {
+    setRecipes([...recipes, recipe])
+  }
+
+  const handleDeleteRecipe = async (id: string) => {
+    try {
+      const response = await fetch(`/api/recipes?id=${id}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+
+      setRecipes(recipes.filter((recipe) => recipe.id !== id))
+    } catch (error) {
+      console.error("Error deleting recipe:", error)
+      alert("Failed to delete recipe. Please try again.")
+    }
+  }
+
+  const handleAddSharedContent = async (content: SharedContent) => {
+    setSharedContent([...sharedContent, content])
+  }
+
+  const handleDeleteSharedContent = async (id: string) => {
+    try {
+      const response = await fetch(`/api/shared-content?id=${id}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+
+      setSharedContent(sharedContent.filter((content) => content.id !== id))
+    } catch (error) {
+      console.error("Error deleting shared content:", error)
+      alert("Failed to delete shared content. Please try again.")
+    }
+  }
+
+  const handleDeleteEvent = async (id: string) => {
+    try {
+      const response = await fetch("/api/events", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      // Update the events state immediately since we know the deletion was successful
+      setEvents(events.filter(event => event.id !== id));
+    } catch (error) {
+      console.error("Error deleting event:", error);
+      // Only show the alert if it's not a 204 response
+      if (error instanceof Error && !error.message.includes('204')) {
+        alert("Failed to delete event. Please try again.");
+      }
+    }
+  };
+
+  if (error) {
+    return (
+      <div className="container mx-auto py-8 px-4 text-center">
+        <h1 className="text-3xl font-bold mb-4">Error</h1>
+        <p className="text-red-500 mb-4">{error}</p>
+        <button className="px-4 py-2 bg-primary text-white rounded" onClick={() => window.location.reload()}>
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <main className="container mx-auto py-8 px-4">
+      <h1 className="text-3xl font-bold mb-8 text-center">Ann Arbor Food and Tech Vibe Group</h1>
+
+      <Tabs defaultValue="events" className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="events">Events</TabsTrigger>
+          <TabsTrigger value="recipes">Recipes</TabsTrigger>
+          <TabsTrigger value="shared">Content</TabsTrigger>
+          <TabsTrigger value="calendar">Calendar</TabsTrigger>
+        </TabsList>
+        <TabsContent value="events">
+          <div>
+            <EventForm onAddEvent={handleAddEvent} />
+          </div>
+
+          {events.length > 0 && (
+            <div>
+              <RsvpForm
+                events={events}
+                onAddRsvp={handleAddRsvp}
+                editingRsvp={editingRsvp}
+                selectedEvent={selectedEvent}
+                setSelectedEvent={setSelectedEvent}
+              />
+            </div>
+          )}
+
+          <div>
+            <h2 className="text-2xl font-semibold mb-4">Event Entries</h2>
+            {loading.events || loading.rsvps ? (
+              <p className="text-center">Loading...</p>
+            ) : (
+              <EventList events={events} rsvps={rsvps} onEditRsvp={handleEditRsvp} onDeleteRsvp={handleDeleteRsvp} onDeleteEvent={handleDeleteEvent} />
+            )}
+          </div>
+        </TabsContent>
+        <TabsContent value="recipes">
+          {loading.recipes ? (
+            <p className="text-center">Loading...</p>
+          ) : (
+            <RecipeUpload recipes={recipes} onAddRecipe={handleAddRecipe} onDeleteRecipe={handleDeleteRecipe} />
+          )}
+        </TabsContent>
+        <TabsContent value="shared">
+          {loading.sharedContent ? (
+            <p className="text-center">Loading...</p>
+          ) : (
+            <SharedContentUpload
+              sharedContent={sharedContent}
+              onAddContent={handleAddSharedContent}
+              onDeleteContent={handleDeleteSharedContent}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+          )}
+        </TabsContent>
+        <TabsContent value="calendar" className="h-[calc(100vh-4rem)]">
+          <CalendarWidget events={events} />
+        </TabsContent>
+      </Tabs>
+    </main>
+  )
 }
+

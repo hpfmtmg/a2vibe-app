@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Event {
+  id        String   @id @default(uuid())
+  name      String
+  date      DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  rsvps     Rsvp[]
+}
+
+model Rsvp {
+  id          String   @id @default(uuid())
+  eventId     String
+  name        String
+  food        String?
+  content     String?
+  attendance  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  event       Event    @relation(fields: [eventId], references: [id])
+}
+
+model Recipe {
+  id         String   @id @default(uuid())
+  name       String
+  fileName   String
+  fileUrl    String
+  uploadDate DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model SharedContent {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  fileName    String
+  fileUrl     String
+  uploadDate  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+} 

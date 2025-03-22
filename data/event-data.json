@@ -1,0 +1,48 @@
+{
+  "events": [],
+  "rsvps": [
+    {
+      "id": "cf201c24-ac41-41fb-90fe-1fcfe5b375a8",
+      "eventId": "2aa7b393-c6a9-4696-9913-39c2ffa619ab",
+      "name": "HP",
+      "food": "Eggs",
+      "content": "vibes",
+      "attendance": "yes"
+    },
+    {
+      "id": "70afbc6f-9370-4d99-94be-fcc08b14d723",
+      "eventId": "2aa7b393-c6a9-4696-9913-39c2ffa619ab",
+      "name": "Chris",
+      "food": "cake",
+      "content": "news",
+      "attendance": "unsure"
+    },
+    {
+      "id": "a1f16610-1d68-43e9-9db5-568851edcaf9",
+      "eventId": "1d06724d-df73-4dfb-9621-b7df1f805593",
+      "name": "a",
+      "food": "a",
+      "content": "a",
+      "attendance": "unsure"
+    }
+  ],
+  "recipes": [
+    {
+      "id": "c207f531-5c11-44b3-a47c-fd7d468e2e5b",
+      "name": "cookie",
+      "fileName": "COOKIE.pdf",
+      "fileUrl": "/uploads/c207f531-5c11-44b3-a47c-fd7d468e2e5b-COOKIE.pdf",
+      "uploadDate": "2025-03-21T01:30:58.920Z"
+    }
+  ],
+  "sharedContent": [
+    {
+      "id": "83bfa153-75c2-474d-a148-9f2fe1e069a4",
+      "title": "cookie",
+      "description": "cookie preso",
+      "fileName": "COOKIE.pdf",
+      "fileUrl": "/uploads/shared-83bfa153-75c2-474d-a148-9f2fe1e069a4-COOKIE.pdf",
+      "uploadDate": "2025-03-21T01:31:19.305Z"
+    }
+  ]
+}
