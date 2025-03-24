@@ -12,10 +12,37 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 
 // Event operations
 export async function createEvent(data: { name: string; date: Date }) {
-  return prisma.event.create({ 
-    data,
-    include: { rsvps: true }
-  })
+  try {
+    console.log('Database: Creating event with data:', data)
+    
+    // Validate input
+    if (!data.name || !data.date) {
+      throw new Error('Missing required fields: name and date are required')
+    }
+
+    // Ensure date is valid
+    if (isNaN(data.date.getTime())) {
+      throw new Error('Invalid date provided')
+    }
+
+    const event = await prisma.event.create({ 
+      data,
+      include: { rsvps: true }
+    })
+
+    console.log('Database: Event created successfully:', event)
+    return event
+  } catch (error) {
+    console.error('Database: Failed to create event:', error)
+    if (error instanceof Error) {
+      console.error('Database error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      })
+    }
+    throw error // Re-throw to be handled by the action
+  }
 }
 
 export async function getEvents() {

@@ -12,11 +12,25 @@ import {
   deleteRecipe,
   deleteSharedContent
 } from '@/lib/db'
+import type { Event, Rsvp, AttendanceStatus } from '@/lib/types'
+
+type ActionResponse<T> = {
+  success: true;
+  data: T;
+} | {
+  success: false;
+  error: string;
+}
 
 // Event schemas
 const createEventSchema = z.object({
   name: z.string().min(1, 'Event name is required'),
-  date: z.string().datetime()
+  date: z.string()
+    .refine((date) => !isNaN(Date.parse(date)), {
+      message: "Invalid date format",
+      path: ["date"]
+    })
+    .transform((str) => new Date(str))
 })
 
 const createRsvpSchema = z.object({
@@ -24,7 +38,10 @@ const createRsvpSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   food: z.string().optional(),
   content: z.string().optional(),
-  attendance: z.string().min(1, 'Attendance is required')
+  attendance: z.enum(['yes', 'no', 'unsure'], {
+    required_error: 'Attendance status is required',
+    invalid_type_error: 'Invalid attendance status',
+  })
 })
 
 const createRecipeSchema = z.object({
@@ -43,15 +60,33 @@ const createSharedContentSchema = z.object({
 // Create actions
 export const createEventAction = createSafeActionClient()
   .schema(createEventSchema)
-  .action(async (data) => {
+  .action(async (data): Promise<ActionResponse<Event>> => {
     try {
+      console.log('Creating event with data:', data.parsedInput)
+      
       const event = await createEvent({
         name: data.parsedInput.name,
-        date: new Date(data.parsedInput.date)
+        date: data.parsedInput.date
       })
-      return { success: true, data: event }
+      
+      // Transform the event to match the Event type
+      const transformedEvent: Event = {
+        id: event.id,
+        name: event.name,
+        date: event.date.toISOString()
+      }
+      
+      console.log('Event created successfully:', transformedEvent)
+      return { success: true, data: transformedEvent }
     } catch (error) {
       console.error('Failed to create event:', error)
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        })
+      }
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to create event'
@@ -61,12 +96,33 @@ export const createEventAction = createSafeActionClient()
 
 export const createRsvpAction = createSafeActionClient()
   .schema(createRsvpSchema)
-  .action(async (data) => {
+  .action(async (data): Promise<ActionResponse<Rsvp>> => {
     try {
+      console.log('Creating RSVP with data:', data.parsedInput)
+      
       const rsvp = await createRsvp(data.parsedInput)
-      return { success: true, data: rsvp }
+      
+      // Transform the RSVP to match our client-side type
+      const transformedRsvp: Rsvp = {
+        id: rsvp.id,
+        eventId: rsvp.eventId,
+        name: rsvp.name,
+        food: rsvp.food || '',
+        content: rsvp.content || '',
+        attendance: rsvp.attendance as AttendanceStatus
+      }
+      
+      console.log('RSVP created successfully:', transformedRsvp)
+      return { success: true, data: transformedRsvp }
     } catch (error) {
       console.error('Failed to create RSVP:', error)
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        })
+      }
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to create RSVP'

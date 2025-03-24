@@ -1,9 +1,10 @@
 export type AttendanceStatus = "yes" | "no" | "unsure"
 
 export interface Event {
-  id: string
+  id?: string
   date: string
   name: string
+  rsvps?: Rsvp[]
 }
 
 export interface Rsvp {

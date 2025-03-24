@@ -10,6 +10,16 @@ import { SharedContentUpload } from "@/components/shared-content-upload"
 import type { Event, Rsvp, Recipe, SharedContent } from "@/lib/types"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { CalendarWidget } from "@/components/calendar-widget"
+import { createEventAction, createRsvpAction } from '@/app/actions/actions'
+import type { SafeActionResult } from 'next-safe-action'
+
+type ActionResponse<T> = {
+  success: true;
+  data: T;
+} | {
+  success: false;
+  error: string;
+}
 
 export default function Home() {
   const [events, setEvents] = useState<Event[]>([])
@@ -77,50 +87,68 @@ export default function Home() {
 
   const handleAddEvent = async (event: Event) => {
     try {
-      const response = await fetch("/api/events", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(event),
-      })
+      const result = await createEventAction({
+        name: event.name,
+        date: event.date
+      }) as ActionResponse<Event>
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
+      if (!result?.success) {
+        throw new Error('Failed to create event')
       }
 
-      setEvents([...events, event])
+      const newEvent = result.data
+      setEvents(prevEvents => [...prevEvents, newEvent])
     } catch (error) {
       console.error("Error adding event:", error)
-      alert("Failed to add event. Please try again.")
+      alert(error instanceof Error ? error.message : "Failed to save event. Please try again.")
     }
   }
 
   const handleAddRsvp = async (rsvp: Rsvp) => {
     try {
-      const response = await fetch("/api/rsvps", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(rsvp),
+      console.log('Submitting RSVP:', rsvp)
+      
+      const result = await createRsvpAction({
+        eventId: rsvp.eventId,
+        name: rsvp.name,
+        food: rsvp.food,
+        content: rsvp.content,
+        attendance: rsvp.attendance
+      }) as ActionResponse<Rsvp>
+
+      console.log('Server response:', result)
+
+      if (!result?.success || !result?.data) {
+        throw new Error('Failed to create RSVP')
+      }
+
+      const newRsvp = result.data
+
+      // Update the global RSVPs state
+      setRsvps(prevRsvps => {
+        if (editingRsvp) {
+          return prevRsvps.map(r => r.id === editingRsvp.id ? newRsvp : r)
+        }
+        return [...prevRsvps, newRsvp]
       })
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
-      }
+      // Update the selected event's RSVPs
+      setSelectedEvent(prevEvent => {
+        if (!prevEvent) return null
+        const currentRsvps = prevEvent.rsvps || []
+        return {
+          ...prevEvent,
+          rsvps: editingRsvp 
+            ? currentRsvps.map(r => r.id === editingRsvp.id ? newRsvp : r)
+            : [...currentRsvps, newRsvp]
+        }
+      })
 
-      if (editingRsvp) {
-        // Update existing RSVP
-        setRsvps(rsvps.map((r) => (r.id === editingRsvp.id ? rsvp : r)))
-        setEditingRsvp(null)
-      } else {
-        // Add new RSVP
-        setRsvps([...rsvps, rsvp])
-      }
+      // Clear editing state
+      setEditingRsvp(null)
     } catch (error) {
       console.error("Error adding RSVP:", error)
-      alert("Failed to save RSVP. Please try again.")
+      alert(error instanceof Error ? error.message : "Failed to save RSVP. Please try again.")
     }
   }
 

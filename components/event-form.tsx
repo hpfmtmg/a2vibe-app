@@ -22,13 +22,14 @@ export function EventForm({ onAddEvent }: EventFormProps) {
 
     if (!eventDate || !eventName) return
 
-    const newEvent: Event = {
-      id: crypto.randomUUID(),
-      date: eventDate,
-      name: eventName,
-    }
+    // Format the date to ISO string
+    const formattedDate = new Date(eventDate).toISOString()
 
-    onAddEvent(newEvent)
+    onAddEvent({
+      name: eventName,
+      date: formattedDate
+    })
+
     setEventDate("")
     setEventName("")
   }
