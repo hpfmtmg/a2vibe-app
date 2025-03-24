@@ -6,7 +6,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL") // Used for direct connection (optional)
+  directUrl = env("DIRECT_URL") // Required for Neon
 }
 
 model Event {
@@ -16,6 +16,8 @@ model Event {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   rsvps     Rsvp[]
+
+  @@index([date])
 }
 
 model Rsvp {
@@ -27,7 +29,9 @@ model Rsvp {
   attendance  String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  event       Event    @relation(fields: [eventId], references: [id])
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
 }
 
 model Recipe {
@@ -38,6 +42,8 @@ model Recipe {
   uploadDate DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([uploadDate])
 }
 
 model SharedContent {
@@ -49,4 +55,6 @@ model SharedContent {
   uploadDate  DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([uploadDate])
 } 
