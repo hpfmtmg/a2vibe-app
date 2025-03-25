@@ -10,7 +10,7 @@ import { SharedContentUpload } from "@/components/shared-content-upload"
 import type { Event, Rsvp, Recipe, SharedContent } from "@/lib/types"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { CalendarWidget } from "@/components/calendar-widget"
-import { createEventAction, createRsvpAction } from '@/app/actions/actions'
+import { createEventAction, createRsvpAction, deleteRsvpAction, getEventsAction, getRsvpsAction, getRecipesAction, getSharedContentAction } from '@/app/actions/actions'
 import type { SafeActionResult } from 'next-safe-action'
 
 type ActionResponse<T> = {
@@ -40,45 +40,78 @@ export default function Home() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        console.log('Client: Starting to fetch data')
+        setLoading({
+          events: true,
+          rsvps: true,
+          recipes: true,
+          sharedContent: true,
+        })
+        setError(null)
+
         // Fetch events
-        const eventsRes = await fetch("/api/events")
-        if (!eventsRes.ok) {
-          throw new Error(`Events API error: ${eventsRes.status}`)
+        console.log('Client: Fetching events...')
+        const eventsResult = await getEventsAction()
+        console.log('Client: Received events result:', eventsResult)
+        
+        if (!eventsResult?.data?.success) {
+          console.error('Client: Failed to fetch events:', eventsResult?.data)
+          throw new Error('Failed to fetch events')
         }
-        const eventsData = await eventsRes.json()
-        setEvents(eventsData)
-        setLoading((prev) => ({ ...prev, events: false }))
+        setEvents(eventsResult.data.data)
 
         // Fetch RSVPs
-        const rsvpsRes = await fetch("/api/rsvps")
-        if (!rsvpsRes.ok) {
-          throw new Error(`RSVPs API error: ${rsvpsRes.status}`)
+        console.log('Client: Fetching RSVPs...')
+        const rsvpsResult = await getRsvpsAction()
+        console.log('Client: Received RSVPs result:', rsvpsResult)
+        
+        if (!rsvpsResult?.data?.success) {
+          console.error('Client: Failed to fetch RSVPs:', rsvpsResult?.data)
+          throw new Error('Failed to fetch RSVPs')
         }
-        const rsvpsData = await rsvpsRes.json()
-        setRsvps(rsvpsData)
-        setLoading((prev) => ({ ...prev, rsvps: false }))
+        setRsvps(rsvpsResult.data.data)
 
         // Fetch recipes
-        const recipesRes = await fetch("/api/recipes")
-        if (!recipesRes.ok) {
-          throw new Error(`Recipes API error: ${recipesRes.status}`)
+        console.log('Client: Fetching recipes...')
+        const recipesResult = await getRecipesAction()
+        console.log('Client: Received recipes result:', recipesResult)
+        
+        if (!recipesResult?.data?.success) {
+          console.error('Client: Failed to fetch recipes:', recipesResult?.data)
+          throw new Error('Failed to fetch recipes')
         }
-        const recipesData = await recipesRes.json()
-        setRecipes(recipesData)
-        setLoading((prev) => ({ ...prev, recipes: false }))
+        setRecipes(recipesResult.data.data)
 
         // Fetch shared content
-        const contentRes = await fetch("/api/shared-content")
-        if (!contentRes.ok) {
-          throw new Error(`Shared Content API error: ${contentRes.status}`)
+        console.log('Client: Fetching shared content...')
+        const sharedContentResult = await getSharedContentAction()
+        console.log('Client: Received shared content result:', sharedContentResult)
+        
+        if (!sharedContentResult?.data?.success) {
+          console.error('Client: Failed to fetch shared content:', sharedContentResult?.data)
+          throw new Error('Failed to fetch shared content')
         }
-        const contentData = await contentRes.json()
-        setSharedContent(contentData)
-        setLoading((prev) => ({ ...prev, sharedContent: false }))
+        setSharedContent(sharedContentResult.data.data)
+
+        console.log('Client: Successfully fetched all data')
       } catch (error) {
-        console.error("Error fetching data:", error)
-        setError(error instanceof Error ? error.message : "Failed to load data")
-        setLoading({ events: false, rsvps: false, recipes: false, sharedContent: false })
+        console.error('Client: Error fetching data:', error)
+        if (error instanceof Error) {
+          console.error('Client error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+            cause: error.cause
+          })
+        }
+        setError(error instanceof Error ? error.message : 'Failed to fetch data')
+      } finally {
+        setLoading({
+          events: false,
+          rsvps: false,
+          recipes: false,
+          sharedContent: false,
+        })
       }
     }
 
@@ -89,66 +122,58 @@ export default function Home() {
     try {
       const result = await createEventAction({
         name: event.name,
-        date: event.date
-      }) as ActionResponse<Event>
+        date: new Date(event.date)
+      })
 
-      if (!result?.success) {
+      if (!result?.data?.success) {
+        console.error('Client: Failed to create event:', result?.data)
         throw new Error('Failed to create event')
       }
 
-      const newEvent = result.data
-      setEvents(prevEvents => [...prevEvents, newEvent])
+      const newEvent = result.data.data
+      setEvents(prev => [...prev, newEvent])
     } catch (error) {
-      console.error("Error adding event:", error)
-      alert(error instanceof Error ? error.message : "Failed to save event. Please try again.")
+      console.error('Client: Error creating event:', error)
+      if (error instanceof Error) {
+        console.error('Client error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          cause: error.cause
+        })
+      }
+      setError(error instanceof Error ? error.message : 'Failed to create event')
     }
   }
 
   const handleAddRsvp = async (rsvp: Rsvp) => {
     try {
-      console.log('Submitting RSVP:', rsvp)
-      
       const result = await createRsvpAction({
         eventId: rsvp.eventId,
         name: rsvp.name,
         food: rsvp.food,
         content: rsvp.content,
-        attendance: rsvp.attendance
-      }) as ActionResponse<Rsvp>
+        attendance: rsvp.attendance as 'yes' | 'no' | 'maybe'
+      })
 
-      console.log('Server response:', result)
-
-      if (!result?.success || !result?.data) {
+      if (!result?.data?.success) {
+        console.error('Client: Failed to create RSVP:', result?.data)
         throw new Error('Failed to create RSVP')
       }
 
-      const newRsvp = result.data
-
-      // Update the global RSVPs state
-      setRsvps(prevRsvps => {
-        if (editingRsvp) {
-          return prevRsvps.map(r => r.id === editingRsvp.id ? newRsvp : r)
-        }
-        return [...prevRsvps, newRsvp]
-      })
-
-      // Update the selected event's RSVPs
-      setSelectedEvent(prevEvent => {
-        if (!prevEvent) return null
-        const currentRsvps = prevEvent.rsvps || []
-        return {
-          ...prevEvent,
-          rsvps: editingRsvp 
-            ? currentRsvps.map(r => r.id === editingRsvp.id ? newRsvp : r)
-            : [...currentRsvps, newRsvp]
-        }
-      })
-
-      // Clear editing state
-      setEditingRsvp(null)
+      const newRsvp = result.data.data
+      setRsvps(prev => [...prev, newRsvp])
     } catch (error) {
-      console.error("Error adding RSVP:", error)
-      alert(error instanceof Error ? error.message : "Failed to save RSVP. Please try again.")
+      console.error('Client: Error creating RSVP:', error)
+      if (error instanceof Error) {
+        console.error('Client error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          cause: error.cause
+        })
+      }
+      setError(error instanceof Error ? error.message : 'Failed to create RSVP')
     }
   }
 
@@ -159,12 +184,10 @@ export default function Home() {
 
   const handleDeleteRsvp = async (id: string) => {
     try {
-      const response = await fetch(`/api/rsvps?id=${id}`, {
-        method: "DELETE",
-      })
+      const result = await deleteRsvpAction({ id }) as ActionResponse<void>
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
+      if (!result?.success) {
+        throw new Error('Failed to delete RSVP')
       }
 
       setRsvps(rsvps.filter((rsvp) => rsvp.id !== id))
