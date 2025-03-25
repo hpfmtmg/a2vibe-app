@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { events } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
+import { prisma } from '@/lib/db'
 
 export async function POST(request: Request) {
   try {
@@ -15,15 +13,17 @@ export async function POST(request: Request) {
       )
     }
 
-    const newEvent = await db.insert(events).values({
-      title,
-      date: new Date(date),
-      location,
-      description,
-      imageUrl,
-    }).returning()
+    const newEvent = await prisma.event.create({
+      data: {
+        title,
+        date: new Date(date),
+        location,
+        description,
+        imageUrl,
+      },
+    })
 
-    return NextResponse.json(newEvent[0])
+    return NextResponse.json(newEvent)
   } catch (error) {
     console.error('Error creating event:', error)
     return NextResponse.json(
@@ -39,23 +39,21 @@ export async function GET(request: Request) {
     const eventId = searchParams.get('eventId')
 
     if (eventId) {
-      const event = await db
-        .select()
-        .from(events)
-        .where(eq(events.id, eventId))
-        .limit(1)
+      const event = await prisma.event.findUnique({
+        where: { id: eventId },
+      })
 
-      if (!event.length) {
+      if (!event) {
         return NextResponse.json(
           { error: 'Event not found' },
           { status: 404 }
         )
       }
 
-      return NextResponse.json(event[0])
+      return NextResponse.json(event)
     }
 
-    const allEvents = await db.select().from(events)
+    const allEvents = await prisma.event.findMany()
     return NextResponse.json(allEvents)
   } catch (error) {
     console.error('Error fetching events:', error)
@@ -78,27 +76,19 @@ export async function PUT(request: Request) {
       )
     }
 
-    const updatedEvent = await db
-      .update(events)
-      .set({
+    const updatedEvent = await prisma.event.update({
+      where: { id },
+      data: {
         title,
         date: new Date(date),
         location,
         description,
         imageUrl,
         updatedAt: new Date(),
-      })
-      .where(eq(events.id, id))
-      .returning()
+      },
+    })
 
-    if (!updatedEvent.length) {
-      return NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      )
-    }
-
-    return NextResponse.json(updatedEvent[0])
+    return NextResponse.json(updatedEvent)
   } catch (error) {
     console.error('Error updating event:', error)
     return NextResponse.json(
@@ -120,17 +110,9 @@ export async function DELETE(request: Request) {
       )
     }
 
-    const deletedEvent = await db
-      .delete(events)
-      .where(eq(events.id, eventId))
-      .returning()
-
-    if (!deletedEvent.length) {
-      return NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      )
-    }
+    await prisma.event.delete({
+      where: { id: eventId },
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { rsvps } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
+import { prisma } from '@/lib/db'
 
 export async function POST(request: Request) {
   try {
@@ -16,31 +14,34 @@ export async function POST(request: Request) {
     }
 
     // Check if RSVP already exists
-    const existingRSVP = await db
-      .select()
-      .from(rsvps)
-      .where(eq(rsvps.eventId, eventId))
-      .where(eq(rsvps.email, email))
-      .limit(1)
+    const existingRSVP = await prisma.rsvp.findFirst({
+      where: {
+        eventId,
+        email,
+      },
+    })
 
-    if (existingRSVP.length > 0) {
+    if (existingRSVP) {
       // Update existing RSVP
-      await db
-        .update(rsvps)
-        .set({
+      await prisma.rsvp.update({
+        where: {
+          id: existingRSVP.id,
+        },
+        data: {
           name,
           attending,
           updatedAt: new Date(),
-        })
-        .where(eq(rsvps.eventId, eventId))
-        .where(eq(rsvps.email, email))
+        },
+      })
     } else {
       // Create new RSVP
-      await db.insert(rsvps).values({
-        eventId,
-        name,
-        email,
-        attending,
+      await prisma.rsvp.create({
+        data: {
+          eventId,
+          name,
+          email,
+          attending,
+        },
       })
     }
 
@@ -66,10 +67,11 @@ export async function GET(request: Request) {
       )
     }
 
-    const eventRSVPs = await db
-      .select()
-      .from(rsvps)
-      .where(eq(rsvps.eventId, eventId))
+    const eventRSVPs = await prisma.rsvp.findMany({
+      where: {
+        eventId,
+      },
+    })
 
     return NextResponse.json(eventRSVPs)
   } catch (error) {
