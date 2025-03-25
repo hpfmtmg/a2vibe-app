@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 
+// Prevent multiple instances of Prisma Client in development
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
@@ -7,21 +8,77 @@ const globalForPrisma = globalThis as unknown as {
 // Initialize Prisma with detailed logging
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({
   log: ['query', 'error', 'warn', 'info'],
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL
-    }
-  }
 })
 
 // Log database URL (without sensitive info)
 console.log('Database: Connection URL:', process.env.DATABASE_URL?.replace(/\/\/[^:]+:[^@]+@/, '//***:***@'))
 
+// Add connection error handler
+prisma.$use(async (params, next) => {
+  try {
+    return await next(params)
+  } catch (error) {
+    console.error('Database: Error in Prisma Client operation:', error)
+    if (error instanceof Error && error.message.includes('Connection')) {
+      console.log('Database: Attempting to reconnect...')
+      await prisma.$connect()
+    }
+    throw error
+  }
+})
+
+// Ensure single instance in development
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+
+// Helper function to test database connection
+async function testConnection() {
+  try {
+    await prisma.$connect()
+    const result = await prisma.$queryRaw`SELECT 1`
+    console.log('Database: Connection test successful:', result)
+    return true
+  } catch (error) {
+    console.error('Database: Connection test failed:', error)
+    return false
+  }
+}
+
+// Export the connection test function
+export { testConnection }
+
+// Wrapper function for database operations with retry logic
+async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {
+  let lastError: Error | null = null
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Test connection before operation
+      const isConnected = await testConnection()
+      if (!isConnected) {
+        console.log(`Database: Reconnecting (attempt ${attempt}/${maxRetries})...`)
+        await prisma.$connect()
+      }
+      
+      // Execute operation
+      return await operation()
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+      console.error(`Database: Operation failed (attempt ${attempt}/${maxRetries}):`, error)
+      
+      if (attempt < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000)
+        console.log(`Database: Retrying in ${delay}ms...`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+  }
+  
+  throw lastError || new Error('Operation failed after max retries')
+}
 
 // Event operations
 export async function createEvent(data: { name: string; date: Date }) {
-  try {
+  return withRetry(async () => {
     console.log('Database: Creating event with data:', data)
     
     // Validate input
@@ -34,10 +91,6 @@ export async function createEvent(data: { name: string; date: Date }) {
       throw new Error('Invalid date provided')
     }
 
-    // Test database connection
-    await prisma.$connect()
-    console.log('Database: Connected successfully before creating event')
-
     const event = await prisma.event.create({ 
       data,
       include: { rsvps: true }
@@ -45,63 +98,17 @@ export async function createEvent(data: { name: string; date: Date }) {
 
     console.log('Database: Event created successfully:', event)
     return event
-  } catch (error) {
-    console.error('Database: Failed to create event:', error)
-    if (error instanceof Error) {
-      console.error('Database error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        cause: error.cause
-      })
-    }
-    throw error // Re-throw to be handled by the action
-  }
+  })
 }
 
 export async function getEvents() {
-  try {
+  return withRetry(async () => {
     console.log('Database: Starting to fetch events')
     
-    // Test database connection with detailed logging
-    try {
-      console.log('Database: Attempting to connect to database...')
-      await prisma.$connect()
-      console.log('Database: Successfully connected to database')
-      
-      // Test a simple query to verify connection
-      const testQuery = await prisma.$queryRaw`SELECT 1`
-      console.log('Database: Test query successful:', testQuery)
-    } catch (connectionError) {
-      console.error('Database: Failed to connect to database:', connectionError)
-      if (connectionError instanceof Error) {
-        console.error('Database connection error details:', {
-          message: connectionError.message,
-          stack: connectionError.stack,
-          name: connectionError.name,
-          cause: connectionError.cause
-        })
-      }
-      throw new Error('Database connection failed')
-    }
-
-    // Check if prisma is initialized
-    if (!prisma) {
-      console.error('Database: Prisma client is not initialized')
-      throw new Error('Database client not initialized')
-    }
-
-    // Execute query with timeout
-    console.log('Database: Executing events query...')
-    const events = await Promise.race([
-      prisma.event.findMany({
-        include: { rsvps: true },
-        orderBy: { date: 'asc' }
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Database query timeout')), 5000)
-      )
-    ]) as any
+    const events = await prisma.event.findMany({
+      include: { rsvps: true },
+      orderBy: { date: 'asc' }
+    })
 
     console.log('Database: Successfully fetched events:', events)
     
@@ -123,39 +130,34 @@ export async function getEvents() {
     })
 
     return events
-  } catch (error) {
-    console.error('Database: Failed to fetch events:', error)
-    if (error instanceof Error) {
-      console.error('Database error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        cause: error.cause
-      })
-    }
-    throw error // Re-throw to be handled by the action
-  }
+  })
 }
 
 export async function getEvent(id: string) {
-  return prisma.event.findUnique({
-    where: { id },
-    include: { rsvps: true }
-  })
+  return withRetry(() => 
+    prisma.event.findUnique({
+      where: { id },
+      include: { rsvps: true }
+    })
+  )
 }
 
 export async function updateEvent(id: string, data: { name?: string; date?: Date }) {
-  return prisma.event.update({
-    where: { id },
-    data,
-    include: { rsvps: true }
-  })
+  return withRetry(() => 
+    prisma.event.update({
+      where: { id },
+      data,
+      include: { rsvps: true }
+    })
+  )
 }
 
 export async function deleteEvent(id: string) {
-  return prisma.event.delete({
-    where: { id }
-  })
+  return withRetry(() => 
+    prisma.event.delete({
+      where: { id }
+    })
+  )
 }
 
 // RSVP operations
@@ -172,7 +174,7 @@ export async function createRsvp({
   content: string
   attendance: 'yes' | 'no' | 'maybe'
 }) {
-  try {
+  return withRetry(async () => {
     console.log('Database: Starting to create RSVP:', {
       eventId,
       name,
@@ -180,37 +182,8 @@ export async function createRsvp({
       content,
       attendance
     })
-    
-    // Test database connection with detailed logging
-    try {
-      console.log('Database: Attempting to connect to database...')
-      await prisma.$connect()
-      console.log('Database: Successfully connected to database')
-      
-      // Test a simple query to verify connection
-      const testQuery = await prisma.$queryRaw`SELECT 1`
-      console.log('Database: Test query successful:', testQuery)
-    } catch (connectionError) {
-      console.error('Database: Failed to connect to database:', connectionError)
-      if (connectionError instanceof Error) {
-        console.error('Database connection error details:', {
-          message: connectionError.message,
-          stack: connectionError.stack,
-          name: connectionError.name,
-          cause: connectionError.cause
-        })
-      }
-      throw new Error('Database connection failed')
-    }
-
-    // Check if prisma is initialized
-    if (!prisma) {
-      console.error('Database: Prisma client is not initialized')
-      throw new Error('Database client not initialized')
-    }
 
     // Check if event exists
-    console.log('Database: Checking if event exists...')
     const event = await prisma.event.findUnique({
       where: { id: eventId }
     })
@@ -220,22 +193,15 @@ export async function createRsvp({
       throw new Error('Event not found')
     }
 
-    // Execute query with timeout
-    console.log('Database: Creating RSVP...')
-    const rsvp = await Promise.race([
-      prisma.rsvp.create({
-        data: {
-          eventId,
-          name,
-          food,
-          content,
-          attendance
-        }
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Database query timeout')), 5000)
-      )
-    ]) as any
+    const rsvp = await prisma.rsvp.create({
+      data: {
+        eventId,
+        name,
+        food,
+        content,
+        attendance
+      }
+    })
 
     console.log('Database: Successfully created RSVP:', rsvp)
     
@@ -251,64 +217,18 @@ export async function createRsvp({
     }
 
     return rsvp
-  } catch (error) {
-    console.error('Database: Failed to create RSVP:', error)
-    if (error instanceof Error) {
-      console.error('Database error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        cause: error.cause
-      })
-    }
-    throw error // Re-throw to be handled by the action
-  }
+  })
 }
 
 export async function getRsvps(eventId: string) {
-  try {
+  return withRetry(async () => {
     console.log('Database: Starting to fetch RSVPs for event:', eventId)
     
-    // Test database connection with detailed logging
-    try {
-      console.log('Database: Attempting to connect to database...')
-      await prisma.$connect()
-      console.log('Database: Successfully connected to database')
-      
-      // Test a simple query to verify connection
-      const testQuery = await prisma.$queryRaw`SELECT 1`
-      console.log('Database: Test query successful:', testQuery)
-    } catch (connectionError) {
-      console.error('Database: Failed to connect to database:', connectionError)
-      if (connectionError instanceof Error) {
-        console.error('Database connection error details:', {
-          message: connectionError.message,
-          stack: connectionError.stack,
-          name: connectionError.name,
-          cause: connectionError.cause
-        })
-      }
-      throw new Error('Database connection failed')
-    }
-
-    // Check if prisma is initialized
-    if (!prisma) {
-      console.error('Database: Prisma client is not initialized')
-      throw new Error('Database client not initialized')
-    }
-
-    // Execute query with timeout
-    console.log('Database: Executing RSVPs query...')
-    const rsvps = await Promise.race([
-      prisma.rsvp.findMany({
-        where: eventId ? { eventId } : undefined,
-        orderBy: { createdAt: 'desc' },
-        include: { event: true }
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Database query timeout')), 5000)
-      )
-    ]) as any
+    const rsvps = await prisma.rsvp.findMany({
+      where: eventId ? { eventId } : undefined,
+      orderBy: { createdAt: 'desc' },
+      include: { event: true }
+    })
 
     console.log('Database: Successfully fetched RSVPs:', rsvps)
     
@@ -330,18 +250,7 @@ export async function getRsvps(eventId: string) {
     })
 
     return rsvps
-  } catch (error) {
-    console.error('Database: Failed to fetch RSVPs:', error)
-    if (error instanceof Error) {
-      console.error('Database error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        cause: error.cause
-      })
-    }
-    throw error // Re-throw to be handled by the action
-  }
+  })
 }
 
 export async function updateRsvp(id: string, data: {
@@ -350,17 +259,21 @@ export async function updateRsvp(id: string, data: {
   content?: string
   attendance?: string
 }) {
-  return prisma.rsvp.update({
-    where: { id },
-    data,
-    include: { event: true }
-  })
+  return withRetry(() => 
+    prisma.rsvp.update({
+      where: { id },
+      data,
+      include: { event: true }
+    })
+  )
 }
 
 export async function deleteRsvp(id: string) {
-  return prisma.rsvp.delete({
-    where: { id }
-  })
+  return withRetry(() => 
+    prisma.rsvp.delete({
+      where: { id }
+    })
+  )
 }
 
 // Recipe operations
@@ -398,47 +311,12 @@ export async function createRecipe(data: { name: string; fileName: string; fileU
 }
 
 export async function getRecipes() {
-  try {
+  return withRetry(async () => {
     console.log('Database: Starting to fetch recipes')
     
-    // Test database connection with detailed logging
-    try {
-      console.log('Database: Attempting to connect to database...')
-      await prisma.$connect()
-      console.log('Database: Successfully connected to database')
-      
-      // Test a simple query to verify connection
-      const testQuery = await prisma.$queryRaw`SELECT 1`
-      console.log('Database: Test query successful:', testQuery)
-    } catch (connectionError) {
-      console.error('Database: Failed to connect to database:', connectionError)
-      if (connectionError instanceof Error) {
-        console.error('Database connection error details:', {
-          message: connectionError.message,
-          stack: connectionError.stack,
-          name: connectionError.name,
-          cause: connectionError.cause
-        })
-      }
-      throw new Error('Database connection failed')
-    }
-
-    // Check if prisma is initialized
-    if (!prisma) {
-      console.error('Database: Prisma client is not initialized')
-      throw new Error('Database client not initialized')
-    }
-
-    // Execute query with timeout
-    console.log('Database: Executing recipes query...')
-    const recipes = await Promise.race([
-      prisma.recipe.findMany({
-        orderBy: { uploadDate: 'desc' }
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Database query timeout')), 5000)
-      )
-    ]) as any
+    const recipes = await prisma.recipe.findMany({
+      orderBy: { uploadDate: 'desc' }
+    })
 
     console.log('Database: Successfully fetched recipes:', recipes)
     
@@ -456,18 +334,7 @@ export async function getRecipes() {
     })
 
     return recipes
-  } catch (error) {
-    console.error('Database: Failed to fetch recipes:', error)
-    if (error instanceof Error) {
-      console.error('Database error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        cause: error.cause
-      })
-    }
-    throw error // Re-throw to be handled by the action
-  }
+  })
 }
 
 export async function deleteRecipe(id: string) {
@@ -538,8 +405,29 @@ export async function createSharedContent(data: { title: string; description?: s
 }
 
 export async function getSharedContent() {
-  return prisma.sharedContent.findMany({
-    orderBy: { uploadDate: 'desc' }
+  return withRetry(async () => {
+    console.log('Database: Starting to fetch shared content')
+    
+    const content = await prisma.sharedContent.findMany({
+      orderBy: { uploadDate: 'desc' }
+    })
+
+    console.log('Database: Successfully fetched shared content:', content)
+    
+    if (!content) {
+      console.error('Database: No shared content returned from query')
+      return []
+    }
+
+    // Validate the structure of each shared content item
+    content.forEach((item: any) => {
+      if (!item.id || !item.title || !item.fileName || !item.fileUrl) {
+        console.error('Database: Invalid shared content structure:', item)
+        throw new Error('Invalid shared content structure in database')
+      }
+    })
+
+    return content
   })
 }
 
