@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
-    "@prisma/client": "^5.10.0",
+    "@prisma/client": "^6.5.0",
     "@radix-ui/react-label": "^2.1.2",
     "@radix-ui/react-radio-group": "^1.2.3",
     "@radix-ui/react-select": "^2.1.6",
