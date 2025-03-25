@@ -159,46 +159,97 @@ export async function deleteEvent(id: string) {
 }
 
 // RSVP operations
-export async function createRsvp(data: {
+export async function createRsvp({
+  eventId,
+  name,
+  food,
+  content,
+  attendance
+}: {
   eventId: string
   name: string
-  food?: string
-  content?: string
-  attendance: string
+  food: string
+  content: string
+  attendance: 'yes' | 'no' | 'maybe'
 }) {
   try {
-    console.log('Database: Creating RSVP with data:', data)
+    console.log('Database: Starting to create RSVP:', {
+      eventId,
+      name,
+      food,
+      content,
+      attendance
+    })
     
-    // Validate input
-    if (!data.eventId || !data.name || !data.attendance) {
-      throw new Error('Missing required fields: eventId, name, and attendance are required')
+    // Test database connection with detailed logging
+    try {
+      console.log('Database: Attempting to connect to database...')
+      await prisma.$connect()
+      console.log('Database: Successfully connected to database')
+      
+      // Test a simple query to verify connection
+      const testQuery = await prisma.$queryRaw`SELECT 1`
+      console.log('Database: Test query successful:', testQuery)
+    } catch (connectionError) {
+      console.error('Database: Failed to connect to database:', connectionError)
+      if (connectionError instanceof Error) {
+        console.error('Database connection error details:', {
+          message: connectionError.message,
+          stack: connectionError.stack,
+          name: connectionError.name,
+          cause: connectionError.cause
+        })
+      }
+      throw new Error('Database connection failed')
     }
 
-    // Test database connection
-    await prisma.$connect()
-    console.log('Database: Connected successfully before creating RSVP')
+    // Check if prisma is initialized
+    if (!prisma) {
+      console.error('Database: Prisma client is not initialized')
+      throw new Error('Database client not initialized')
+    }
 
-    // Verify event exists
+    // Check if event exists
+    console.log('Database: Checking if event exists...')
     const event = await prisma.event.findUnique({
-      where: { id: data.eventId }
+      where: { id: eventId }
     })
 
     if (!event) {
-      throw new Error(`Event with ID ${data.eventId} not found`)
+      console.error('Database: Event not found:', eventId)
+      throw new Error('Event not found')
     }
 
-    const rsvp = await prisma.rsvp.create({
-      data: {
-        eventId: data.eventId,
-        name: data.name,
-        food: data.food || '',
-        content: data.content || '',
-        attendance: data.attendance
-      },
-      include: { event: true }
-    })
+    // Execute query with timeout
+    console.log('Database: Creating RSVP...')
+    const rsvp = await Promise.race([
+      prisma.rsvp.create({
+        data: {
+          eventId,
+          name,
+          food,
+          content,
+          attendance
+        }
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Database query timeout')), 5000)
+      )
+    ]) as any
 
-    console.log('Database: RSVP created successfully:', rsvp)
+    console.log('Database: Successfully created RSVP:', rsvp)
+    
+    if (!rsvp) {
+      console.error('Database: No RSVP returned from create query')
+      throw new Error('Failed to create RSVP')
+    }
+
+    // Validate the structure of the RSVP
+    if (!rsvp.id || !rsvp.eventId || !rsvp.name || !rsvp.attendance) {
+      console.error('Database: Invalid RSVP structure:', rsvp)
+      throw new Error('Invalid RSVP structure from database')
+    }
+
     return rsvp
   } catch (error) {
     console.error('Database: Failed to create RSVP:', error)

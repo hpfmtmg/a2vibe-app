@@ -1,4 +1,4 @@
-export type AttendanceStatus = "yes" | "no" | "unsure"
+export type AttendanceStatus = "yes" | "no" | "maybe"
 
 export interface Event {
   id?: string
@@ -14,6 +14,7 @@ export interface Rsvp {
   food: string
   content: string
   attendance: AttendanceStatus
+  createdAt: string
 }
 
 export interface Recipe {

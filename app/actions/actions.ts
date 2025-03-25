@@ -120,32 +120,46 @@ export const createEventAction = createSafeActionClient()
   })
 
 export const createRsvpAction = createSafeActionClient()
-  .schema(z.object({
-    eventId: z.string().min(1, "Event ID is required"),
-    name: z.string().min(1, "Name is required"),
-    food: z.string().optional(),
-    content: z.string().optional(),
-    attendance: z.enum(['yes', 'no', 'maybe'])
-  }))
+  .schema(
+    z.object({
+      eventId: z.string(),
+      name: z.string(),
+      food: z.string(),
+      content: z.string(),
+      attendance: z.enum(['yes', 'no', 'maybe'] as const)
+    })
+  )
   .action(async (data): Promise<ActionResponse<Rsvp>> => {
     try {
-      console.log('Server Action: Starting createRsvpAction with input:', data.parsedInput)
-      
-      // Validate input
-      if (!data.parsedInput.eventId || !data.parsedInput.name || !data.parsedInput.attendance) {
-        console.error('Server Action: Missing required fields:', data.parsedInput)
-        return { success: false, error: 'Missing required fields' }
-      }
-
-      // Create RSVP in database
-      const rsvp = await createRsvp({
+      console.log('Server Action: Starting createRsvpAction with input:', {
         eventId: data.parsedInput.eventId,
         name: data.parsedInput.name,
         food: data.parsedInput.food,
         content: data.parsedInput.content,
         attendance: data.parsedInput.attendance
       })
-      console.log('Server Action: RSVP created successfully:', rsvp)
+
+      // Validate input
+      if (!data.parsedInput.eventId || !data.parsedInput.name || !data.parsedInput.attendance) {
+        console.error('Server Action: Missing required fields')
+        return { success: false, error: 'Missing required fields' }
+      }
+
+      // Create RSVP in database
+      console.log('Server Action: Creating RSVP in database...')
+      const rsvp = await createRsvp({
+        eventId: data.parsedInput.eventId,
+        name: data.parsedInput.name,
+        food: data.parsedInput.food || '',
+        content: data.parsedInput.content || '',
+        attendance: data.parsedInput.attendance
+      })
+      console.log('Server Action: Raw RSVP from database:', rsvp)
+
+      if (!rsvp) {
+        console.error('Server Action: Failed to create RSVP in database')
+        return { success: false, error: 'Failed to create RSVP' }
+      }
 
       // Transform the RSVP to match the Rsvp type
       const transformedRsvp: Rsvp = {
@@ -154,13 +168,14 @@ export const createRsvpAction = createSafeActionClient()
         name: rsvp.name,
         food: rsvp.food || '',
         content: rsvp.content || '',
-        attendance: rsvp.attendance as AttendanceStatus
+        attendance: rsvp.attendance,
+        createdAt: rsvp.createdAt.toISOString()
       }
 
       console.log('Server Action: Transformed RSVP:', transformedRsvp)
       return { success: true, data: transformedRsvp }
     } catch (error) {
-      console.error('Server Action: Failed to create RSVP:', error)
+      console.error('Server Action: Error creating RSVP:', error)
       if (error instanceof Error) {
         console.error('Server Action error details:', {
           message: error.message,
@@ -169,10 +184,7 @@ export const createRsvpAction = createSafeActionClient()
           cause: error.cause
         })
       }
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Failed to create RSVP'
-      }
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to create RSVP' }
     }
   })
 
@@ -311,7 +323,8 @@ export const getEventsAction = createSafeActionClient()
               name: string;
               food?: string;
               content?: string;
-              attendance: string;
+              attendance: AttendanceStatus;
+              createdAt: Date;
             }) => {
               if (!rsvp.id || !rsvp.eventId || !rsvp.name) {
                 console.error('Server Action: RSVP missing required fields:', rsvp)
@@ -323,7 +336,8 @@ export const getEventsAction = createSafeActionClient()
                 name: rsvp.name,
                 food: rsvp.food || '',
                 content: rsvp.content || '',
-                attendance: rsvp.attendance as AttendanceStatus
+                attendance: rsvp.attendance as AttendanceStatus,
+                createdAt: rsvp.createdAt.toISOString()
               }
             })
           }
@@ -388,7 +402,8 @@ export const getRsvpsAction = createSafeActionClient()
             name: rsvp.name,
             food: rsvp.food || '',
             content: rsvp.content || '',
-            attendance: rsvp.attendance as AttendanceStatus
+            attendance: rsvp.attendance as AttendanceStatus,
+            createdAt: rsvp.createdAt.toISOString()
           }
           
           console.log('Server Action: Transformed RSVP:', transformed)
