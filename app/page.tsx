@@ -10,7 +10,7 @@ import { SharedContentUpload } from "@/components/shared-content-upload"
 import type { Event, Rsvp, Recipe, SharedContent } from "@/lib/types"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { CalendarWidget } from "@/components/calendar-widget"
-import { createEventAction, createRsvpAction, deleteRsvpAction, getEventsAction, getRsvpsAction, getRecipesAction, getSharedContentAction } from '@/app/actions/actions'
+import { createEventAction, createRsvpAction, deleteRsvpAction, getEventsAction, getRsvpsAction, getRecipesAction, getSharedContentAction, createRecipeAction, deleteRecipeAction, createSharedContentAction, deleteSharedContentAction } from '@/app/actions/actions'
 import type { SafeActionResult } from 'next-safe-action'
 
 type ActionResponse<T> = {
@@ -198,17 +198,40 @@ export default function Home() {
   }
 
   const handleAddRecipe = async (recipe: Recipe) => {
-    setRecipes([...recipes, recipe])
+    try {
+      const result = await createRecipeAction({
+        name: recipe.name,
+        fileName: recipe.fileName,
+        fileUrl: recipe.fileUrl
+      })
+
+      if (!result?.data?.success) {
+        console.error('Client: Failed to create recipe:', result?.data)
+        throw new Error('Failed to create recipe')
+      }
+
+      const newRecipe = result.data.data
+      setRecipes(prev => [...prev, newRecipe])
+    } catch (error) {
+      console.error('Client: Error creating recipe:', error)
+      if (error instanceof Error) {
+        console.error('Client error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          cause: error.cause
+        })
+      }
+      setError(error instanceof Error ? error.message : 'Failed to create recipe')
+    }
   }
 
   const handleDeleteRecipe = async (id: string) => {
     try {
-      const response = await fetch(`/api/recipes?id=${id}`, {
-        method: "DELETE",
-      })
+      const result = await deleteRecipeAction({ id }) as ActionResponse<void>
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
+      if (!result?.success) {
+        throw new Error('Failed to delete recipe')
       }
 
       setRecipes(recipes.filter((recipe) => recipe.id !== id))
@@ -219,17 +242,41 @@ export default function Home() {
   }
 
   const handleAddSharedContent = async (content: SharedContent) => {
-    setSharedContent([...sharedContent, content])
+    try {
+      const result = await createSharedContentAction({
+        title: content.title,
+        description: content.description,
+        fileName: content.fileName,
+        fileUrl: content.fileUrl
+      })
+
+      if (!result?.data?.success) {
+        console.error('Client: Failed to create shared content:', result?.data)
+        throw new Error('Failed to create shared content')
+      }
+
+      const newContent = result.data.data
+      setSharedContent(prev => [...prev, newContent])
+    } catch (error) {
+      console.error('Client: Error creating shared content:', error)
+      if (error instanceof Error) {
+        console.error('Client error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          cause: error.cause
+        })
+      }
+      setError(error instanceof Error ? error.message : 'Failed to create shared content')
+    }
   }
 
   const handleDeleteSharedContent = async (id: string) => {
     try {
-      const response = await fetch(`/api/shared-content?id=${id}`, {
-        method: "DELETE",
-      })
+      const result = await deleteSharedContentAction({ id }) as ActionResponse<void>
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
+      if (!result?.success) {
+        throw new Error('Failed to delete shared content')
       }
 
       setSharedContent(sharedContent.filter((content) => content.id !== id))

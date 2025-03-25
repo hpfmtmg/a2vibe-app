@@ -364,12 +364,37 @@ export async function deleteRsvp(id: string) {
 }
 
 // Recipe operations
-export async function createRecipe(data: {
-  name: string
-  fileName: string
-  fileUrl: string
-}) {
-  return prisma.recipe.create({ data })
+export async function createRecipe(data: { name: string; fileName: string; fileUrl: string }) {
+  try {
+    console.log('Database: Creating recipe with data:', data)
+    
+    // Validate input
+    if (!data.name || !data.fileName || !data.fileUrl) {
+      throw new Error('Missing required fields: name, fileName, and fileUrl are required')
+    }
+
+    // Test database connection
+    await prisma.$connect()
+    console.log('Database: Connected successfully before creating recipe')
+
+    const recipe = await prisma.recipe.create({ 
+      data
+    })
+
+    console.log('Database: Recipe created successfully:', recipe)
+    return recipe
+  } catch (error) {
+    console.error('Database: Failed to create recipe:', error)
+    if (error instanceof Error) {
+      console.error('Database error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        cause: error.cause
+      })
+    }
+    throw error // Re-throw to be handled by the action
+  }
 }
 
 export async function getRecipes() {
@@ -446,19 +471,70 @@ export async function getRecipes() {
 }
 
 export async function deleteRecipe(id: string) {
-  return prisma.recipe.delete({
-    where: { id }
-  })
+  try {
+    console.log('Database: Deleting recipe with id:', id)
+    
+    // Validate input
+    if (!id) {
+      throw new Error('Recipe ID is required')
+    }
+
+    // Test database connection
+    await prisma.$connect()
+    console.log('Database: Connected successfully before deleting recipe')
+
+    const recipe = await prisma.recipe.delete({ 
+      where: { id }
+    })
+
+    console.log('Database: Recipe deleted successfully:', recipe)
+    return recipe
+  } catch (error) {
+    console.error('Database: Failed to delete recipe:', error)
+    if (error instanceof Error) {
+      console.error('Database error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        cause: error.cause
+      })
+    }
+    throw error // Re-throw to be handled by the action
+  }
 }
 
-// SharedContent operations
-export async function createSharedContent(data: {
-  title: string
-  description?: string
-  fileName: string
-  fileUrl: string
-}) {
-  return prisma.sharedContent.create({ data })
+// Shared Content operations
+export async function createSharedContent(data: { title: string; description?: string; fileName: string; fileUrl: string }) {
+  try {
+    console.log('Database: Creating shared content with data:', data)
+    
+    // Validate input
+    if (!data.title || !data.fileName || !data.fileUrl) {
+      throw new Error('Missing required fields: title, fileName, and fileUrl are required')
+    }
+
+    // Test database connection
+    await prisma.$connect()
+    console.log('Database: Connected successfully before creating shared content')
+
+    const content = await prisma.sharedContent.create({ 
+      data
+    })
+
+    console.log('Database: Shared content created successfully:', content)
+    return content
+  } catch (error) {
+    console.error('Database: Failed to create shared content:', error)
+    if (error instanceof Error) {
+      console.error('Database error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        cause: error.cause
+      })
+    }
+    throw error // Re-throw to be handled by the action
+  }
 }
 
 export async function getSharedContent() {
@@ -468,8 +544,35 @@ export async function getSharedContent() {
 }
 
 export async function deleteSharedContent(id: string) {
-  return prisma.sharedContent.delete({
-    where: { id }
-  })
+  try {
+    console.log('Database: Deleting shared content with id:', id)
+    
+    // Validate input
+    if (!id) {
+      throw new Error('Content ID is required')
+    }
+
+    // Test database connection
+    await prisma.$connect()
+    console.log('Database: Connected successfully before deleting shared content')
+
+    const content = await prisma.sharedContent.delete({ 
+      where: { id }
+    })
+
+    console.log('Database: Shared content deleted successfully:', content)
+    return content
+  } catch (error) {
+    console.error('Database: Failed to delete shared content:', error)
+    if (error instanceof Error) {
+      console.error('Database error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        cause: error.cause
+      })
+    }
+    throw error // Re-throw to be handled by the action
+  }
 }
 

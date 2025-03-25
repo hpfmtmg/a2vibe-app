@@ -189,13 +189,50 @@ export const createRsvpAction = createSafeActionClient()
   })
 
 export const createRecipeAction = createSafeActionClient()
-  .schema(createRecipeSchema)
-  .action(async (data) => {
+  .schema(z.object({
+    name: z.string().min(1, "Name is required"),
+    fileName: z.string().min(1, "File name is required"),
+    fileUrl: z.string().url("Invalid file URL")
+  }))
+  .action(async (data): Promise<ActionResponse<Recipe>> => {
     try {
-      const recipe = await createRecipe(data.parsedInput)
-      return { success: true, data: recipe }
+      console.log('Server Action: Starting createRecipeAction with input:', data.parsedInput)
+      
+      // Validate input
+      if (!data.parsedInput.name || !data.parsedInput.fileName || !data.parsedInput.fileUrl) {
+        console.error('Server Action: Missing required fields:', data.parsedInput)
+        return { success: false, error: 'Missing required fields' }
+      }
+
+      // Create recipe in database
+      const recipe = await createRecipe({
+        name: data.parsedInput.name,
+        fileName: data.parsedInput.fileName,
+        fileUrl: data.parsedInput.fileUrl
+      })
+      console.log('Server Action: Recipe created successfully:', recipe)
+
+      // Transform the recipe to match the Recipe type
+      const transformedRecipe: Recipe = {
+        id: recipe.id,
+        name: recipe.name,
+        fileName: recipe.fileName,
+        fileUrl: recipe.fileUrl,
+        uploadDate: recipe.uploadDate.toISOString()
+      }
+
+      console.log('Server Action: Transformed recipe:', transformedRecipe)
+      return { success: true, data: transformedRecipe }
     } catch (error) {
-      console.error('Failed to create recipe:', error)
+      console.error('Server Action: Failed to create recipe:', error)
+      if (error instanceof Error) {
+        console.error('Server Action error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          cause: error.cause
+        })
+      }
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to create recipe'
@@ -204,13 +241,53 @@ export const createRecipeAction = createSafeActionClient()
   })
 
 export const createSharedContentAction = createSafeActionClient()
-  .schema(createSharedContentSchema)
-  .action(async (data) => {
+  .schema(z.object({
+    title: z.string().min(1, "Title is required"),
+    description: z.string().optional(),
+    fileName: z.string().min(1, "File name is required"),
+    fileUrl: z.string().url("Invalid file URL")
+  }))
+  .action(async (data): Promise<ActionResponse<SharedContent>> => {
     try {
-      const content = await createSharedContent(data.parsedInput)
-      return { success: true, data: content }
+      console.log('Server Action: Starting createSharedContentAction with input:', data.parsedInput)
+      
+      // Validate input
+      if (!data.parsedInput.title || !data.parsedInput.fileName || !data.parsedInput.fileUrl) {
+        console.error('Server Action: Missing required fields:', data.parsedInput)
+        return { success: false, error: 'Missing required fields' }
+      }
+
+      // Create shared content in database
+      const content = await createSharedContent({
+        title: data.parsedInput.title,
+        description: data.parsedInput.description,
+        fileName: data.parsedInput.fileName,
+        fileUrl: data.parsedInput.fileUrl
+      })
+      console.log('Server Action: Shared content created successfully:', content)
+
+      // Transform the shared content to match the SharedContent type
+      const transformedContent: SharedContent = {
+        id: content.id,
+        title: content.title,
+        description: content.description || '',
+        fileName: content.fileName,
+        fileUrl: content.fileUrl,
+        uploadDate: content.uploadDate.toISOString()
+      }
+
+      console.log('Server Action: Transformed shared content:', transformedContent)
+      return { success: true, data: transformedContent }
     } catch (error) {
-      console.error('Failed to create shared content:', error)
+      console.error('Server Action: Failed to create shared content:', error)
+      if (error instanceof Error) {
+        console.error('Server Action error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          cause: error.cause
+        })
+      }
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to create shared content'
@@ -250,13 +327,34 @@ export const deleteRsvpAction = createSafeActionClient()
   })
 
 export const deleteRecipeAction = createSafeActionClient()
-  .schema(z.object({ id: z.string().uuid() }))
-  .action(async (data) => {
+  .schema(z.object({
+    id: z.string().min(1, "Recipe ID is required")
+  }))
+  .action(async (data): Promise<ActionResponse<void>> => {
     try {
+      console.log('Server Action: Starting deleteRecipeAction with input:', data.parsedInput)
+      
+      // Validate input
+      if (!data.parsedInput.id) {
+        console.error('Server Action: Missing recipe ID:', data.parsedInput)
+        return { success: false, error: 'Recipe ID is required' }
+      }
+
+      // Delete recipe from database
       await deleteRecipe(data.parsedInput.id)
-      return { success: true }
+      console.log('Server Action: Recipe deleted successfully')
+
+      return { success: true, data: undefined }
     } catch (error) {
-      console.error('Failed to delete recipe:', error)
+      console.error('Server Action: Failed to delete recipe:', error)
+      if (error instanceof Error) {
+        console.error('Server Action error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          cause: error.cause
+        })
+      }
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to delete recipe'
@@ -265,13 +363,34 @@ export const deleteRecipeAction = createSafeActionClient()
   })
 
 export const deleteSharedContentAction = createSafeActionClient()
-  .schema(z.object({ id: z.string().uuid() }))
-  .action(async (data) => {
+  .schema(z.object({
+    id: z.string().min(1, "Content ID is required")
+  }))
+  .action(async (data): Promise<ActionResponse<void>> => {
     try {
+      console.log('Server Action: Starting deleteSharedContentAction with input:', data.parsedInput)
+      
+      // Validate input
+      if (!data.parsedInput.id) {
+        console.error('Server Action: Missing content ID:', data.parsedInput)
+        return { success: false, error: 'Content ID is required' }
+      }
+
+      // Delete shared content from database
       await deleteSharedContent(data.parsedInput.id)
-      return { success: true }
+      console.log('Server Action: Shared content deleted successfully')
+
+      return { success: true, data: undefined }
     } catch (error) {
-      console.error('Failed to delete shared content:', error)
+      console.error('Server Action: Failed to delete shared content:', error)
+      if (error instanceof Error) {
+        console.error('Server Action error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          cause: error.cause
+        })
+      }
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to delete shared content'
