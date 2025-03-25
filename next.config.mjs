@@ -8,9 +8,7 @@ const nextConfig = {
   },
   images: {
     unoptimized: true,
-  },
-  experimental: {
-    serverActions: true,
+    domains: ['a2vibe.s3.amazonaws.com'],
   },
   output: 'standalone',
   distDir: '.next',
