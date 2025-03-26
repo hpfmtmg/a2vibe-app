@@ -85,4 +85,54 @@ export async function GET(request: Request) {
       { status: 500 }
     )
   }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const rsvpId = searchParams.get('id')
+
+    if (!rsvpId) {
+      return NextResponse.json(
+        { error: 'RSVP ID is required' },
+        { status: 400 }
+      )
+    }
+
+    console.log('Attempting to delete RSVP:', rsvpId)
+
+    // First check if the RSVP exists
+    const rsvp = await prisma.rsvp.findUnique({
+      where: { id: rsvpId },
+    })
+
+    if (!rsvp) {
+      console.log('RSVP not found:', rsvpId)
+      return NextResponse.json(
+        { error: 'RSVP not found' },
+        { status: 404 }
+      )
+    }
+
+    console.log('Found RSVP, deleting')
+    await prisma.rsvp.delete({
+      where: { id: rsvpId },
+    })
+    console.log('Deleted RSVP:', rsvpId)
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting RSVP:', error)
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      })
+    }
+    return NextResponse.json(
+      { error: 'Failed to delete RSVP', details: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    )
+  }
 } 

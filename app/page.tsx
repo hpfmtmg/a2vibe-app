@@ -12,6 +12,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { CalendarWidget } from "@/components/calendar-widget"
 import { createEventAction, createRsvpAction, deleteRsvpAction, getEventsAction, getRsvpsAction, getRecipesAction, getSharedContentAction, createRecipeAction, deleteRecipeAction, createSharedContentAction, deleteSharedContentAction } from '@/app/actions/actions'
 import type { SafeActionResult } from 'next-safe-action'
+import { toast } from "@/components/ui/use-toast"
 
 type ActionResponse<T> = {
   success: true;
@@ -184,18 +185,41 @@ export default function Home() {
 
   const handleDeleteRsvp = async (id: string) => {
     try {
-      const result = await deleteRsvpAction({ id }) as ActionResponse<void>
+      const response = await fetch(`/api/rsvps?id=${id}`, {
+        method: "DELETE",
+      });
 
-      if (!result?.success) {
-        throw new Error('Failed to delete RSVP')
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
       }
 
-      setRsvps(rsvps.filter((rsvp) => rsvp.id !== id))
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Refresh the RSVPs list
+      const rsvpsResponse = await fetch("/api/rsvps");
+      if (!rsvpsResponse.ok) {
+        throw new Error(`API error: ${rsvpsResponse.status}`);
+      }
+      const rsvpsData = await rsvpsResponse.json();
+      setRsvps(rsvpsData);
+
+      // Show success message
+      toast({
+        title: "Success",
+        description: "RSVP deleted successfully",
+      });
     } catch (error) {
-      console.error("Error deleting RSVP:", error)
-      alert("Failed to delete RSVP. Please try again.")
+      console.error("Error deleting RSVP:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete RSVP",
+        variant: "destructive",
+      });
     }
-  }
+  };
 
   const handleAddRecipe = async (recipe: Recipe) => {
     try {
@@ -288,26 +312,39 @@ export default function Home() {
 
   const handleDeleteEvent = async (id: string) => {
     try {
-      const response = await fetch("/api/events", {
+      const response = await fetch(`/api/events?eventId=${id}`, {
         method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id }),
       });
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
 
-      // Update the events state immediately since we know the deletion was successful
-      setEvents(events.filter(event => event.id !== id));
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Refresh the events list
+      const eventsResponse = await fetch("/api/events");
+      if (!eventsResponse.ok) {
+        throw new Error(`API error: ${eventsResponse.status}`);
+      }
+      const eventsData = await eventsResponse.json();
+      setEvents(eventsData);
+
+      // Show success message
+      toast({
+        title: "Success",
+        description: "Event deleted successfully",
+      });
     } catch (error) {
       console.error("Error deleting event:", error);
-      // Only show the alert if it's not a 204 response
-      if (error instanceof Error && !error.message.includes('204')) {
-        alert("Failed to delete event. Please try again.");
-      }
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete event",
+        variant: "destructive",
+      });
     }
   };
 

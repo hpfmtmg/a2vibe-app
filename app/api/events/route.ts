@@ -117,19 +117,40 @@ export async function DELETE(request: Request) {
       )
     }
 
-    await prisma.rsvp.deleteMany({
-      where: { eventId },
-    })
+    console.log('Attempting to delete event:', eventId)
 
-    await prisma.event.delete({
+    // First check if the event exists
+    const event = await prisma.event.findUnique({
       where: { id: eventId },
     })
+
+    if (!event) {
+      console.log('Event not found:', eventId)
+      return NextResponse.json(
+        { error: 'Event not found' },
+        { status: 404 }
+      )
+    }
+
+    console.log('Found event, deleting with cascade')
+    // Delete the event (RSVPs will be deleted automatically due to cascade)
+    const deleteEventResult = await prisma.event.delete({
+      where: { id: eventId },
+    })
+    console.log('Deleted event:', deleteEventResult)
 
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting event:', error)
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      })
+    }
     return NextResponse.json(
-      { error: 'Failed to delete event' },
+      { error: 'Failed to delete event', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }
