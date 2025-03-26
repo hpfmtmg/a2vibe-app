@@ -15,7 +15,7 @@ export async function POST(request: Request) {
 
     const newEvent = await prisma.event.create({
       data: {
-        title,
+        name: title,
         date: new Date(date),
         location,
         description,
@@ -41,6 +41,9 @@ export async function GET(request: Request) {
     if (eventId) {
       const event = await prisma.event.findUnique({
         where: { id: eventId },
+        include: {
+          rsvps: true,
+        },
       })
 
       if (!event) {
@@ -53,7 +56,11 @@ export async function GET(request: Request) {
       return NextResponse.json(event)
     }
 
-    const allEvents = await prisma.event.findMany()
+    const allEvents = await prisma.event.findMany({
+      include: {
+        rsvps: true,
+      },
+    })
     return NextResponse.json(allEvents)
   } catch (error) {
     console.error('Error fetching events:', error)
@@ -79,7 +86,7 @@ export async function PUT(request: Request) {
     const updatedEvent = await prisma.event.update({
       where: { id },
       data: {
-        title,
+        name: title,
         date: new Date(date),
         location,
         description,
@@ -109,6 +116,10 @@ export async function DELETE(request: Request) {
         { status: 400 }
       )
     }
+
+    await prisma.rsvp.deleteMany({
+      where: { eventId },
+    })
 
     await prisma.event.delete({
       where: { id: eventId },
