@@ -115,6 +115,7 @@ export async function DELETE(request: Request) {
     }
 
     console.log('Found RSVP, deleting')
+    // Delete the RSVP
     await prisma.rsvp.delete({
       where: { id: rsvpId },
     })

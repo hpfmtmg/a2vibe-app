@@ -9,7 +9,6 @@ import { RecipeUpload } from "@/components/recipe-upload"
 import { SharedContentUpload } from "@/components/shared-content-upload"
 import type { Event, Rsvp, Recipe, SharedContent } from "@/lib/types"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { CalendarWidget } from "@/components/calendar-widget"
 import { createEventAction, createRsvpAction, deleteRsvpAction, getEventsAction, getRsvpsAction, getRecipesAction, getSharedContentAction, createRecipeAction, deleteRecipeAction, createSharedContentAction, deleteSharedContentAction } from '@/app/actions/actions'
 import type { SafeActionResult } from 'next-safe-action'
 import { toast } from "@/components/ui/use-toast"
@@ -190,7 +189,8 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || `API error: ${response.status}`);
       }
 
       const data = await response.json();
@@ -198,13 +198,8 @@ export default function Home() {
         throw new Error(data.error);
       }
 
-      // Refresh the RSVPs list
-      const rsvpsResponse = await fetch("/api/rsvps");
-      if (!rsvpsResponse.ok) {
-        throw new Error(`API error: ${rsvpsResponse.status}`);
-      }
-      const rsvpsData = await rsvpsResponse.json();
-      setRsvps(rsvpsData);
+      // Update the local state immediately
+      setRsvps(prevRsvps => prevRsvps.filter(rsvp => rsvp.id !== id));
 
       // Show success message
       toast({
@@ -365,11 +360,10 @@ export default function Home() {
       <h1 className="text-3xl font-bold mb-8 text-center">Ann Arbor Food and Tech Vibe Group</h1>
 
       <Tabs defaultValue="events" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="recipes">Recipes</TabsTrigger>
           <TabsTrigger value="shared">Content</TabsTrigger>
-          <TabsTrigger value="calendar">Calendar</TabsTrigger>
         </TabsList>
         <TabsContent value="events">
           <div>
@@ -414,9 +408,6 @@ export default function Home() {
               onDeleteContent={handleDeleteSharedContent}
             />
           )}
-        </TabsContent>
-        <TabsContent value="calendar" className="h-[calc(100vh-4rem)]">
-          <CalendarWidget events={events} />
         </TabsContent>
       </Tabs>
     </main>
