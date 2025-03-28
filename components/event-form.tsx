@@ -22,8 +22,10 @@ export function EventForm({ onAddEvent }: EventFormProps) {
 
     if (!eventDate || !eventName) return
 
-    // Format the date to ISO string
-    const formattedDate = new Date(eventDate).toISOString()
+    // Create a date object and set it to noon UTC to avoid timezone issues
+    const date = new Date(eventDate)
+    date.setUTCHours(12, 0, 0, 0) // Set to noon UTC
+    const formattedDate = date.toISOString()
 
     onAddEvent({
       name: eventName,

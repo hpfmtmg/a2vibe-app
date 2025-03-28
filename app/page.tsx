@@ -9,7 +9,7 @@ import { RecipeUpload } from "@/components/recipe-upload"
 import { SharedContentUpload } from "@/components/shared-content-upload"
 import type { Event, Rsvp, Recipe, SharedContent } from "@/lib/types"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { createEventAction, createRsvpAction, deleteRsvpAction, getEventsAction, getRsvpsAction, getRecipesAction, getSharedContentAction, createRecipeAction, deleteRecipeAction, createSharedContentAction, deleteSharedContentAction } from '@/app/actions/actions'
+import { createEventAction, createRsvpAction, deleteRsvpAction, getEventsAction, getRsvpsAction, getRecipesAction, getSharedContentAction, createRecipeAction, deleteRecipeAction, createSharedContentAction, deleteSharedContentAction, updateRSVPAction } from '@/app/actions/actions'
 import { testDatabaseConnection } from '@/app/server-test'
 import type { SafeActionResult } from 'next-safe-action'
 import { toast } from "@/components/ui/use-toast"
@@ -189,6 +189,67 @@ export default function Home() {
   const handleEditRsvp = (rsvp: Rsvp) => {
     setEditingRsvp(rsvp)
     setSelectedEvent(events.find((e) => e.id === rsvp.eventId) || null)
+  }
+
+  const handleEditRSVP = async (rsvp: Rsvp) => {
+    try {
+      console.log('Client: Starting RSVP edit:', rsvp)
+      const result = await updateRSVPAction({
+        id: rsvp.id,
+        name: rsvp.name,
+        food: rsvp.food || '',
+        content: rsvp.content || '',
+        attendance: rsvp.attendance
+      })
+      console.log('Client: RSVP edit result:', result)
+
+      if (!result?.data?.success) {
+        console.error('Client: Server returned error:', result?.data)
+        toast({
+          title: "Error",
+          description: result?.data?.error || "Failed to update RSVP",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Update the existing RSVP in the list
+      setRsvps(prevRsvps => 
+        prevRsvps.map(r => 
+          r.id === rsvp.id ? {
+            ...r,
+            name: rsvp.name,
+            food: rsvp.food || '',
+            content: rsvp.content || '',
+            attendance: rsvp.attendance
+          } : r
+        )
+      )
+
+      // Clear the editing state
+      setEditingRsvp(null)
+      setSelectedEvent(null)
+
+      // Refresh the RSVPs list for the specific event
+      if (rsvp.eventId) {
+        const rsvpsResult = await getRsvpsAction({ eventId: rsvp.eventId })
+        if (rsvpsResult?.data?.success) {
+          setRsvps(rsvpsResult.data.data)
+        }
+      }
+
+      toast({
+        title: "Success",
+        description: "RSVP updated successfully",
+      })
+    } catch (error) {
+      console.error("Error updating RSVP:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update RSVP",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleDeleteRsvp = async (id: string) => {
@@ -374,6 +435,44 @@ export default function Home() {
     }
   };
 
+  const getRsvps = async () => {
+    try {
+      console.log('Client: Starting to fetch RSVPs')
+      const result = await getRsvpsAction({ eventId: selectedEvent?.id || '' })
+      console.log('Client: RSVPs fetch result:', result)
+
+      if (!result?.data?.success) {
+        console.error('Client: Failed to fetch RSVPs:', result?.data)
+        toast({
+          title: "Error",
+          description: "Failed to fetch RSVPs",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Transform the RSVPs to match the expected type
+      const transformedRSVPs = result.data.data.map(rsvp => ({
+        id: rsvp.id,
+        eventId: rsvp.eventId,
+        name: rsvp.name,
+        food: rsvp.food || '',
+        content: rsvp.content || '',
+        attendance: rsvp.attendance,
+        createdAt: rsvp.createdAt
+      }))
+
+      setRsvps(transformedRSVPs)
+    } catch (error) {
+      console.error("Error fetching RSVPs:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to fetch RSVPs",
+        variant: "destructive",
+      })
+    }
+  }
+
   if (error) {
     return (
       <div className="container mx-auto py-8 px-4 text-center">
@@ -406,9 +505,11 @@ export default function Home() {
               <RsvpForm
                 events={events}
                 onAddRsvp={handleAddRsvp}
+                onUpdateRsvp={handleEditRSVP}
                 editingRsvp={editingRsvp}
                 selectedEvent={selectedEvent}
                 setSelectedEvent={setSelectedEvent}
+                setEditingRsvp={setEditingRsvp}
               />
             </div>
           )}

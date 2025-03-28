@@ -53,114 +53,80 @@ export function SharedContentUpload({ sharedContent, onAddContent, onDeleteConte
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('Client: Form submitted with:', { title, description, file: file?.name })
-    
+
     if (!title || !file) {
-      console.log('Client: Missing fields:', { title, file: !!file })
       toast({
-        title: "Missing fields",
+        title: "Error",
         description: "Please fill in all required fields",
         variant: "destructive",
       })
       return
     }
 
-    setIsUploading(true)
     try {
-      console.log('Client: Starting content upload...')
-      
-      // Convert File to Uint8Array
-      console.log('Client: Converting file to Uint8Array...')
-      const bytes = await file.arrayBuffer()
-      const fileData = new Uint8Array(bytes)
-      console.log('Client: File converted to Uint8Array:', {
-        length: fileData.length,
-        isUint8Array: fileData instanceof Uint8Array,
-        constructor: fileData.constructor.name,
-        value: fileData
+      console.log('Client: Starting content upload:', {
+        title,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
       })
 
+      // Convert file to Uint8Array
+      const arrayBuffer = await file.arrayBuffer()
+      const uint8Array = new Uint8Array(arrayBuffer)
+      console.log('Client: File converted to Uint8Array:', {
+        length: uint8Array.length,
+        isUint8Array: uint8Array instanceof Uint8Array
+      })
+
+      // Create input object
       const input = {
         title,
         description: description || '',
         fileName: file.name,
-        fileData: Array.from(fileData) // Convert to regular array for serialization
+        fileData: uint8Array
       }
-      console.log('Client: Calling createSharedContentAction with:', {
+      console.log('Client: Sending content data to server:', {
         title: input.title,
         description: input.description,
         fileName: input.fileName,
         fileDataLength: input.fileData.length,
-        isArray: Array.isArray(input.fileData),
-        constructor: input.fileData.constructor.name
+        fileDataType: typeof input.fileData,
+        isUint8Array: input.fileData instanceof Uint8Array
       })
 
-      // Call the server action
-      console.log('Client: Making server action call...')
+      // Call server action
       const result = await createSharedContentAction(input)
-      console.log('Client: Server action call completed, result:', result)
+      console.log('Client: Server action response:', result)
 
-      if (!result.success) {
-        console.error('Client: Server returned error:', result.error)
-        if (result.validationErrors) {
-          console.error('Client: Validation errors:', result.validationErrors)
-          // Handle validation errors
-          const errorMessage = Object.entries(result.validationErrors)
-            .map(([field, error]) => {
-              if (typeof error === 'string') return `${field}: ${error}`
-              if (Array.isArray(error)) return `${field}: ${error.join(', ')}`
-              if (error && typeof error === 'object') {
-                if ('_errors' in error) {
-                  return `${field}: ${error._errors.join(', ')}`
-                }
-                return `${field}: ${JSON.stringify(error)}`
-              }
-              return `${field}: Invalid value`
-            })
-            .join('\n')
-          throw new Error(errorMessage)
-        }
-        throw new Error(result.error || 'Failed to create shared content')
+      if (!result?.data?.success) {
+        console.error('Client: Server returned error:', result?.data)
+        toast({
+          title: "Error",
+          description: result?.data?.error || "Failed to create shared content",
+          variant: "destructive",
+        })
+        return
       }
 
-      console.log('Client: Content created successfully:', result.data)
-      
-      // Add the new content to the list immediately
-      onAddContent(result.data)
-      
-      // Clear the form
+      // Update the local state immediately with the new content
+      onAddContent(result.data.data)
+
+      // Clear form
       setTitle("")
       setDescription("")
       setFile(null)
-      
-      // Show success message
       toast({
         title: "Success",
         description: "Content uploaded successfully",
       })
     } catch (error) {
       console.error("Error uploading content:", error)
-      if (error instanceof Error) {
-        console.error('Client error details:', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name,
-          cause: error.cause
-        })
-        toast({
-          title: "Error",
-          description: error.message || "Failed to upload content",
-          variant: "destructive",
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to upload content",
-          variant: "destructive",
-        })
-      }
-    } finally {
-      setIsUploading(false)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to upload content",
+        variant: "destructive",
+      })
     }
   }
 

@@ -14,12 +14,22 @@ import type { Event, Rsvp, AttendanceStatus } from "@/lib/types"
 interface RsvpFormProps {
   events: Event[]
   onAddRsvp: (rsvp: Rsvp) => void
+  onUpdateRsvp: (rsvp: Rsvp) => void
   editingRsvp: Rsvp | null
   selectedEvent: Event | null
   setSelectedEvent: (event: Event | null) => void
+  setEditingRsvp: (rsvp: Rsvp | null) => void
 }
 
-export function RsvpForm({ events, onAddRsvp, editingRsvp, selectedEvent, setSelectedEvent }: RsvpFormProps) {
+export function RsvpForm({ 
+  events, 
+  onAddRsvp, 
+  onUpdateRsvp, 
+  editingRsvp, 
+  selectedEvent, 
+  setSelectedEvent,
+  setEditingRsvp 
+}: RsvpFormProps) {
   const [name, setName] = useState("")
   const [food, setFood] = useState("")
   const [content, setContent] = useState("")
@@ -40,7 +50,7 @@ export function RsvpForm({ events, onAddRsvp, editingRsvp, selectedEvent, setSel
     }
   }, [editingRsvp])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!name || !selectedEvent) return
@@ -52,17 +62,21 @@ export function RsvpForm({ events, onAddRsvp, editingRsvp, selectedEvent, setSel
       food,
       content,
       attendance,
+      createdAt: editingRsvp ? editingRsvp.createdAt : new Date().toISOString()
     }
 
-    onAddRsvp(rsvp)
-
-    // Only reset if not editing
-    if (!editingRsvp) {
-      setName("")
-      setFood("")
-      setContent("")
-      setAttendance("yes")
+    if (editingRsvp) {
+      await onUpdateRsvp(rsvp)
+      setEditingRsvp(null)
+    } else {
+      await onAddRsvp(rsvp)
     }
+
+    // Reset form
+    setName("")
+    setFood("")
+    setContent("")
+    setAttendance("yes")
   }
 
   const handleEventChange = (eventId: string) => {
@@ -143,8 +157,8 @@ export function RsvpForm({ events, onAddRsvp, editingRsvp, selectedEvent, setSel
                       <Label htmlFor="no">No</Label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="unsure" id="unsure" />
-                      <Label htmlFor="unsure">Unsure</Label>
+                      <RadioGroupItem value="maybe" id="maybe" />
+                      <Label htmlFor="maybe">Maybe</Label>
                     </div>
                   </RadioGroup>
                 </div>
@@ -159,7 +173,7 @@ export function RsvpForm({ events, onAddRsvp, editingRsvp, selectedEvent, setSel
               variant="outline"
               onClick={() => {
                 setSelectedEvent(null)
-                onAddRsvp(editingRsvp)
+                setEditingRsvp(null)
               }}
               className="mr-2"
             >

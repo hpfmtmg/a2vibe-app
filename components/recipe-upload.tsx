@@ -18,7 +18,7 @@ interface RecipeUploadProps {
 }
 
 export function RecipeUpload({ recipes, onAddRecipe, onDeleteRecipe }: RecipeUploadProps) {
-  const [name, setName] = useState("")
+  const [recipeName, setRecipeName] = useState("")
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -49,24 +49,24 @@ export function RecipeUpload({ recipes, onAddRecipe, onDeleteRecipe }: RecipeUpl
     setFile(selectedFile)
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name || !file) {
+
+    if (!recipeName || !file) {
       toast({
-        title: "Missing Fields",
-        description: "Please fill in all required fields.",
+        title: "Error",
+        description: "Please fill in all required fields",
         variant: "destructive",
       })
       return
     }
 
-    setIsUploading(true)
     try {
-      console.log('Client: Starting recipe upload...')
-      console.log('Client: File details:', {
-        name: file.name,
-        type: file.type,
-        size: file.size
+      console.log('Client: Starting recipe upload:', {
+        name: recipeName,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
       })
 
       // Convert file to Uint8Array
@@ -74,115 +74,54 @@ export function RecipeUpload({ recipes, onAddRecipe, onDeleteRecipe }: RecipeUpl
       const uint8Array = new Uint8Array(arrayBuffer)
       console.log('Client: File converted to Uint8Array:', {
         length: uint8Array.length,
-        type: uint8Array.constructor.name
+        isUint8Array: uint8Array instanceof Uint8Array
       })
 
+      // Create input object
       const input = {
-        name,
+        name: recipeName,
         fileName: file.name,
         fileData: uint8Array
       }
-
-      console.log('Client: Sending to server:', {
+      console.log('Client: Sending recipe data to server:', {
         name: input.name,
         fileName: input.fileName,
         fileDataLength: input.fileData.length,
         fileDataType: typeof input.fileData,
-        isUint8Array: input.fileData instanceof Uint8Array,
-        constructor: input.fileData.constructor.name
+        isUint8Array: input.fileData instanceof Uint8Array
       })
 
+      // Call server action
       const result = await createRecipeAction(input)
-      console.log('Client: Server action call completed, result:', result)
+      console.log('Client: Server action response:', result)
 
-      // Handle the next-safe-action response structure
-      if (!result || typeof result !== 'object') {
-        console.error('Client: Invalid server response:', result)
-        throw new Error('Invalid server response')
-      }
-
-      // Check for validation errors
-      if ('validationErrors' in result) {
-        console.error('Client: Validation errors:', result.validationErrors)
-        const errorMessage = Object.entries(result.validationErrors)
-          .map(([field, error]) => {
-            if (typeof error === 'string') return `${field}: ${error}`
-            if (Array.isArray(error)) return `${field}: ${error.join(', ')}`
-            if (error && typeof error === 'object') {
-              if ('_errors' in error) {
-                return `${field}: ${error._errors.join(', ')}`
-              }
-              return `${field}: ${JSON.stringify(error)}`
-            }
-            return `${field}: Invalid value`
-          })
-          .join('\n')
-        throw new Error(errorMessage)
-      }
-
-      // Check for success/error response
-      if (!result.success) {
-        console.error('Client: Server returned error:', result.error)
+      if (!result?.data?.success) {
+        console.error('Client: Server returned error:', result?.data)
         toast({
           title: "Error",
-          description: result.error || "Failed to create recipe",
+          description: result?.data?.error || "Failed to create recipe",
           variant: "destructive",
         })
         return
       }
 
-      // Clear form
-      setName("")
-      setFile(null)
+      // Update the local state immediately with the new recipe
+      onAddRecipe(result.data.data)
 
-      // Add recipe to the list immediately
-      if (result.data) {
-        console.log('Client: Adding recipe to state:', result.data)
-        // Ensure we're passing a valid Recipe object
-        const recipe: Recipe = {
-          id: result.data.id,
-          name: result.data.name,
-          fileName: result.data.fileName,
-          fileData: result.data.fileData,
-          createdAt: result.data.createdAt,
-          updatedAt: result.data.updatedAt
-        }
-        onAddRecipe(recipe)
-        toast({
-          title: "Success",
-          description: "Recipe uploaded successfully",
-        })
-      } else {
-        console.error('Client: Server returned success but no data:', result)
-        toast({
-          title: "Error",
-          description: "Recipe created but data not received",
-          variant: "destructive",
-        })
-      }
+      // Clear form
+      setRecipeName("")
+      setFile(null)
+      toast({
+        title: "Success",
+        description: "Recipe uploaded successfully",
+      })
     } catch (error) {
-      console.error('Client: Error uploading recipe:', error)
-      if (error instanceof Error) {
-        console.error('Client error details:', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name,
-          cause: error.cause
-        })
-        toast({
-          title: "Error",
-          description: error.message || "Failed to create recipe",
-          variant: "destructive",
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: "An unexpected error occurred",
-          variant: "destructive",
-        })
-      }
-    } finally {
-      setIsUploading(false)
+      console.error("Error uploading recipe:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to upload recipe",
+        variant: "destructive",
+      })
     }
   }
 
@@ -232,8 +171,8 @@ export function RecipeUpload({ recipes, onAddRecipe, onDeleteRecipe }: RecipeUpl
               <Label htmlFor="name">Recipe Name</Label>
               <Input
                 id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={recipeName}
+                onChange={(e) => setRecipeName(e.target.value)}
                 placeholder="Enter recipe name"
               />
             </div>

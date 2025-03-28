@@ -15,7 +15,8 @@ import {
   getRsvps,
   getRecipes,
   getSharedContent,
-  testConnection
+  testConnection,
+  updateRsvp
 } from '@/lib/db'
 import type { Event, Rsvp, AttendanceStatus, Recipe, SharedContent } from '@/lib/types'
 
@@ -35,7 +36,12 @@ const createEventSchema = z.object({
       message: "Invalid date format",
       path: ["date"]
     })
-    .transform((str) => new Date(str))
+    .transform((str) => {
+      // Create a date object and ensure it's at noon UTC
+      const date = new Date(str)
+      date.setUTCHours(12, 0, 0, 0)
+      return date
+    })
 })
 
 const createRsvpSchema = z.object({
@@ -796,6 +802,62 @@ export const getSharedContentAction = createSafeActionClient()
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to fetch shared content'
+      }
+    }
+  })
+
+export const updateRSVPAction = createSafeActionClient()
+  .schema(z.object({
+    id: z.string().min(1, "RSVP ID is required"),
+    name: z.string().min(1, "Name is required"),
+    food: z.string().optional(),
+    content: z.string().optional(),
+    attendance: z.enum(["yes", "no", "maybe"] as const)
+  }))
+  .action(async (data): Promise<ActionResponse<Rsvp>> => {
+    try {
+      console.log('Server Action: Starting updateRSVPAction with input:', data.parsedInput)
+      
+      // Validate input
+      if (!data.parsedInput.id) {
+        console.error('Server Action: Missing RSVP ID:', data.parsedInput)
+        return { success: false, error: 'RSVP ID is required' }
+      }
+
+      // Update RSVP in database
+      const updatedRSVP = await updateRsvp(data.parsedInput.id, {
+        name: data.parsedInput.name,
+        food: data.parsedInput.food || '',
+        content: data.parsedInput.content || '',
+        attendance: data.parsedInput.attendance
+      })
+      console.log('Server Action: RSVP updated successfully:', updatedRSVP)
+
+      // Transform the response to match the Rsvp type
+      const transformedRSVP: Rsvp = {
+        id: updatedRSVP.id,
+        eventId: updatedRSVP.eventId,
+        name: updatedRSVP.name,
+        food: updatedRSVP.food || '',
+        content: updatedRSVP.content || '',
+        attendance: updatedRSVP.attendance,
+        createdAt: updatedRSVP.createdAt.toISOString()
+      }
+
+      return { success: true, data: transformedRSVP }
+    } catch (error) {
+      console.error('Server Action: Failed to update RSVP:', error)
+      if (error instanceof Error) {
+        console.error('Server Action error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          cause: error.cause
+        })
+      }
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to update RSVP'
       }
     }
   }) 
