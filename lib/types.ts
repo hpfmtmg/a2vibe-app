@@ -21,8 +21,9 @@ export interface Recipe {
   id: string
   name: string
   fileName: string
-  fileUrl: string
-  uploadDate: string
+  fileData: Uint8Array
+  createdAt: string
+  updatedAt: string
 }
 
 export interface SharedContent {
@@ -30,7 +31,8 @@ export interface SharedContent {
   title: string
   description: string
   fileName: string
-  fileUrl: string
-  uploadDate: string
+  fileData: Uint8Array
+  createdAt: string
+  updatedAt: string
 }
 

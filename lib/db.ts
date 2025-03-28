@@ -277,62 +277,77 @@ export async function deleteRsvp(id: string) {
 }
 
 // Recipe operations
-export async function createRecipe(data: { name: string; fileName: string; fileUrl: string }) {
-  try {
-    console.log('Database: Creating recipe with data:', data)
-    
-    // Validate input
-    if (!data.name || !data.fileName || !data.fileUrl) {
-      throw new Error('Missing required fields: name, fileName, and fileUrl are required')
-    }
-
-    // Test database connection
-    await prisma.$connect()
-    console.log('Database: Connected successfully before creating recipe')
-
-    const recipe = await prisma.recipe.create({ 
-      data
-    })
-
-    console.log('Database: Recipe created successfully:', recipe)
-    return recipe
-  } catch (error) {
-    console.error('Database: Failed to create recipe:', error)
-    if (error instanceof Error) {
-      console.error('Database error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        cause: error.cause
+export async function createRecipe(data: { name: string; fileName: string; fileData: Uint8Array }) {
+  return withRetry(async () => {
+    try {
+      console.log('Database: Starting recipe creation with data:', { 
+        name: data.name,
+        fileName: data.fileName,
+        fileDataLength: data.fileData.length 
       })
+      
+      // Validate input
+      if (!data.name || !data.fileName || !data.fileData) {
+        console.error('Database: Missing required fields:', { 
+          name: !!data.name,
+          fileName: !!data.fileName,
+          fileData: !!data.fileData
+        })
+        throw new Error('Missing required fields: name, fileName, and fileData are required')
+      }
+
+      // Convert Uint8Array to Buffer
+      console.log('Database: Converting Uint8Array to Buffer...')
+      const buffer = Buffer.from(data.fileData)
+      console.log('Database: Buffer created, length:', buffer.length)
+
+      console.log('Database: Creating recipe in database...')
+      const recipe = await prisma.recipe.create({ 
+        data: {
+          name: data.name,
+          fileName: data.fileName,
+          fileData: buffer
+        }
+      })
+
+      if (!recipe) {
+        console.error('Database: No recipe returned from create query')
+        throw new Error('Failed to create recipe in database')
+      }
+
+      console.log('Database: Recipe created successfully:', {
+        id: recipe.id,
+        name: recipe.name,
+        fileName: recipe.fileName,
+        fileDataLength: recipe.fileData.length
+      })
+      return recipe
+    } catch (error) {
+      console.error('Database: Error in createRecipe:', error)
+      if (error instanceof Error) {
+        console.error('Database error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          cause: error.cause
+        })
+      }
+      throw error // Re-throw to be handled by the action
     }
-    throw error // Re-throw to be handled by the action
-  }
+  })
 }
 
 export async function getRecipes() {
   return withRetry(async () => {
-    console.log('Database: Starting to fetch recipes')
+    console.log('Database: Fetching all recipes')
     
     const recipes = await prisma.recipe.findMany({
-      orderBy: { uploadDate: 'desc' }
+      orderBy: {
+        createdAt: 'desc',
+      },
     })
 
     console.log('Database: Successfully fetched recipes:', recipes)
-    
-    if (!recipes) {
-      console.error('Database: No recipes returned from query')
-      return []
-    }
-
-    // Validate the structure of each recipe
-    recipes.forEach((recipe: any) => {
-      if (!recipe.id || !recipe.name || !recipe.fileName || !recipe.fileUrl) {
-        console.error('Database: Invalid recipe structure:', recipe)
-        throw new Error('Invalid recipe structure in database')
-      }
-    })
-
     return recipes
   })
 }
@@ -371,62 +386,42 @@ export async function deleteRecipe(id: string) {
 }
 
 // Shared Content operations
-export async function createSharedContent(data: { title: string; description?: string; fileName: string; fileUrl: string }) {
-  try {
-    console.log('Database: Creating shared content with data:', data)
+export async function createSharedContent(data: { title: string; description?: string; fileName: string; fileData: Uint8Array }) {
+  return withRetry(async () => {
+    console.log('Database: Creating shared content with data:', { ...data, fileData: '[Uint8Array]' })
     
     // Validate input
-    if (!data.title || !data.fileName || !data.fileUrl) {
-      throw new Error('Missing required fields: title, fileName, and fileUrl are required')
+    if (!data.title || !data.fileName || !data.fileData) {
+      throw new Error('Missing required fields: title, fileName, and fileData are required')
     }
 
-    // Test database connection
-    await prisma.$connect()
-    console.log('Database: Connected successfully before creating shared content')
+    // Convert Uint8Array to Buffer
+    const buffer = Buffer.from(data.fileData)
 
     const content = await prisma.sharedContent.create({ 
-      data
+      data: {
+        title: data.title,
+        description: data.description || '',
+        fileName: data.fileName,
+        fileData: buffer
+      }
     })
-
     console.log('Database: Shared content created successfully:', content)
     return content
-  } catch (error) {
-    console.error('Database: Failed to create shared content:', error)
-    if (error instanceof Error) {
-      console.error('Database error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        cause: error.cause
-      })
-    }
-    throw error // Re-throw to be handled by the action
-  }
+  })
 }
 
 export async function getSharedContent() {
   return withRetry(async () => {
-    console.log('Database: Starting to fetch shared content')
+    console.log('Database: Fetching all shared content')
     
     const content = await prisma.sharedContent.findMany({
-      orderBy: { uploadDate: 'desc' }
+      orderBy: {
+        createdAt: 'desc',
+      },
     })
 
     console.log('Database: Successfully fetched shared content:', content)
-    
-    if (!content) {
-      console.error('Database: No shared content returned from query')
-      return []
-    }
-
-    // Validate the structure of each shared content item
-    content.forEach((item: any) => {
-      if (!item.id || !item.title || !item.fileName || !item.fileUrl) {
-        console.error('Database: Invalid shared content structure:', item)
-        throw new Error('Invalid shared content structure in database')
-      }
-    })
-
     return content
   })
 }

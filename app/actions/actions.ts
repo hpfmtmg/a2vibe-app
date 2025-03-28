@@ -14,7 +14,8 @@ import {
   getEvents,
   getRsvps,
   getRecipes,
-  getSharedContent
+  getSharedContent,
+  testConnection
 } from '@/lib/db'
 import type { Event, Rsvp, AttendanceStatus, Recipe, SharedContent } from '@/lib/types'
 
@@ -51,14 +52,74 @@ const createRsvpSchema = z.object({
 const createRecipeSchema = z.object({
   name: z.string().min(1, 'Recipe name is required'),
   fileName: z.string().min(1, 'File name is required'),
-  fileUrl: z.string().url('Invalid file URL')
+  fileData: z.any().refine((val) => {
+    console.log('Server Action: Validating fileData:', {
+      type: typeof val,
+      isUint8Array: val instanceof Uint8Array,
+      isArray: Array.isArray(val),
+      hasLength: val?.length !== undefined,
+      constructor: val?.constructor?.name,
+      value: val
+    })
+    return val instanceof Uint8Array || Array.isArray(val)
+  }, {
+    message: 'File data must be a Uint8Array or Array',
+    path: ['fileData']
+  }).transform((val) => {
+    try {
+      if (val instanceof Uint8Array) return val
+      if (Array.isArray(val)) {
+        const uint8Array = new Uint8Array(val)
+        console.log('Server Action: Transformed array to Uint8Array:', {
+          originalLength: val.length,
+          transformedLength: uint8Array.length,
+          isUint8Array: uint8Array instanceof Uint8Array
+        })
+        return uint8Array
+      }
+      throw new Error('Invalid file data format')
+    } catch (error) {
+      console.error('Server Action: Error transforming file data:', error)
+      throw error
+    }
+  })
 })
 
 const createSharedContentSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
   fileName: z.string().min(1, 'File name is required'),
-  fileUrl: z.string().url('Invalid file URL')
+  fileData: z.any().refine((val) => {
+    console.log('Server Action: Validating shared content fileData:', {
+      type: typeof val,
+      isUint8Array: val instanceof Uint8Array,
+      isArray: Array.isArray(val),
+      hasLength: val?.length !== undefined,
+      constructor: val?.constructor?.name,
+      value: val
+    })
+    return val instanceof Uint8Array || Array.isArray(val)
+  }, {
+    message: 'File data must be a Uint8Array or Array',
+    path: ['fileData']
+  }).transform((val) => {
+    try {
+      if (val instanceof Uint8Array) return val
+      if (Array.isArray(val)) {
+        const uint8Array = new Uint8Array(val)
+        console.log('Server Action: Transformed array to Uint8Array:', {
+          originalLength: val.length,
+          transformedLength: uint8Array.length,
+          isUint8Array: uint8Array instanceof Uint8Array
+        })
+        return uint8Array
+      }
+      throw new Error('Invalid file data format')
+    } catch (error) {
+      console.error('Server Action: Error transforming file data:', error)
+      throw error
+    }
+  })
 })
 
 // Create actions
@@ -189,27 +250,52 @@ export const createRsvpAction = createSafeActionClient()
   })
 
 export const createRecipeAction = createSafeActionClient()
-  .schema(z.object({
-    name: z.string().min(1, "Name is required"),
-    fileName: z.string().min(1, "File name is required"),
-    fileUrl: z.string().url("Invalid file URL")
-  }))
+  .schema(createRecipeSchema)
   .action(async (data): Promise<ActionResponse<Recipe>> => {
     try {
-      console.log('Server Action: Starting createRecipeAction with input:', data.parsedInput)
+      console.log('Server Action: Starting createRecipeAction with input:', { 
+        name: data.parsedInput.name,
+        fileName: data.parsedInput.fileName,
+        fileDataLength: data.parsedInput.fileData?.length,
+        fileDataType: typeof data.parsedInput.fileData,
+        isUint8Array: data.parsedInput.fileData instanceof Uint8Array,
+        constructor: data.parsedInput.fileData?.constructor?.name
+      })
       
       // Validate input
-      if (!data.parsedInput.name || !data.parsedInput.fileName || !data.parsedInput.fileUrl) {
+      if (!data.parsedInput.name || !data.parsedInput.fileName || !data.parsedInput.fileData) {
         console.error('Server Action: Missing required fields:', data.parsedInput)
         return { success: false, error: 'Missing required fields' }
       }
 
+      // Test database connection
+      console.log('Server Action: Testing database connection...')
+      const isConnected = await testConnection()
+      if (!isConnected) {
+        console.error('Server Action: Database connection failed')
+        return { 
+          success: false, 
+          error: 'Database connection failed. Please check your database configuration and try again.'
+        }
+      }
+      console.log('Server Action: Database connection successful')
+
       // Create recipe in database
+      console.log('Server Action: Creating recipe in database...')
       const recipe = await createRecipe({
         name: data.parsedInput.name,
         fileName: data.parsedInput.fileName,
-        fileUrl: data.parsedInput.fileUrl
+        fileData: data.parsedInput.fileData
       })
+
+      if (!recipe) {
+        console.error('Server Action: Failed to create recipe in database')
+        return { 
+          success: false, 
+          error: 'Failed to create recipe in database. Please try again.'
+        }
+      }
+
       console.log('Server Action: Recipe created successfully:', recipe)
 
       // Transform the recipe to match the Recipe type
@@ -217,14 +303,15 @@ export const createRecipeAction = createSafeActionClient()
         id: recipe.id,
         name: recipe.name,
         fileName: recipe.fileName,
-        fileUrl: recipe.fileUrl,
-        uploadDate: recipe.uploadDate.toISOString()
+        fileData: recipe.fileData,
+        createdAt: recipe.createdAt.toISOString(),
+        updatedAt: recipe.updatedAt.toISOString()
       }
 
       console.log('Server Action: Transformed recipe:', transformedRecipe)
       return { success: true, data: transformedRecipe }
     } catch (error) {
-      console.error('Server Action: Failed to create recipe:', error)
+      console.error('Server Action: Error in createRecipeAction:', error)
       if (error instanceof Error) {
         console.error('Server Action error details:', {
           message: error.message,
@@ -232,54 +319,82 @@ export const createRecipeAction = createSafeActionClient()
           name: error.name,
           cause: error.cause
         })
+        // Check if it's a database connection error
+        if (error.message.includes('Can\'t reach database server')) {
+          return { 
+            success: false, 
+            error: 'Database connection failed. Please check your database configuration and try again.'
+          }
+        }
+        return { success: false, error: error.message }
       }
       return { 
         success: false, 
-        error: error instanceof Error ? error.message : 'Failed to create recipe'
+        error: 'An unexpected error occurred while creating the recipe. Please try again.'
       }
     }
   })
 
 export const createSharedContentAction = createSafeActionClient()
-  .schema(z.object({
-    title: z.string().min(1, "Title is required"),
-    description: z.string().optional(),
-    fileName: z.string().min(1, "File name is required"),
-    fileUrl: z.string().url("Invalid file URL")
-  }))
+  .schema(createSharedContentSchema)
   .action(async (data): Promise<ActionResponse<SharedContent>> => {
     try {
-      console.log('Server Action: Starting createSharedContentAction with input:', data.parsedInput)
+      console.log('Server Action: Starting createSharedContentAction with input:', { 
+        title: data.parsedInput.title,
+        description: data.parsedInput.description,
+        fileName: data.parsedInput.fileName,
+        fileDataLength: data.parsedInput.fileData?.length,
+        fileDataType: typeof data.parsedInput.fileData,
+        isUint8Array: data.parsedInput.fileData instanceof Uint8Array,
+        constructor: data.parsedInput.fileData?.constructor?.name
+      })
       
       // Validate input
-      if (!data.parsedInput.title || !data.parsedInput.fileName || !data.parsedInput.fileUrl) {
+      if (!data.parsedInput.title || !data.parsedInput.fileName || !data.parsedInput.fileData) {
         console.error('Server Action: Missing required fields:', data.parsedInput)
         return { success: false, error: 'Missing required fields' }
       }
 
+      // Test database connection
+      console.log('Server Action: Testing database connection...')
+      const isConnected = await testConnection()
+      if (!isConnected) {
+        console.error('Server Action: Database connection failed')
+        return { success: false, error: 'Database connection failed' }
+      }
+      console.log('Server Action: Database connection successful')
+
       // Create shared content in database
+      console.log('Server Action: Creating shared content in database...')
       const content = await createSharedContent({
         title: data.parsedInput.title,
-        description: data.parsedInput.description,
+        description: data.parsedInput.description || '',
         fileName: data.parsedInput.fileName,
-        fileUrl: data.parsedInput.fileUrl
+        fileData: data.parsedInput.fileData
       })
+
+      if (!content) {
+        console.error('Server Action: Failed to create shared content in database')
+        return { success: false, error: 'Failed to create shared content in database' }
+      }
+
       console.log('Server Action: Shared content created successfully:', content)
 
-      // Transform the shared content to match the SharedContent type
+      // Transform the content to match the SharedContent type
       const transformedContent: SharedContent = {
         id: content.id,
         title: content.title,
         description: content.description || '',
         fileName: content.fileName,
-        fileUrl: content.fileUrl,
-        uploadDate: content.uploadDate.toISOString()
+        fileData: content.fileData,
+        createdAt: content.createdAt.toISOString(),
+        updatedAt: content.updatedAt.toISOString()
       }
 
-      console.log('Server Action: Transformed shared content:', transformedContent)
+      console.log('Server Action: Transformed content:', transformedContent)
       return { success: true, data: transformedContent }
     } catch (error) {
-      console.error('Server Action: Failed to create shared content:', error)
+      console.error('Server Action: Error in createSharedContentAction:', error)
       if (error instanceof Error) {
         console.error('Server Action error details:', {
           message: error.message,
@@ -287,11 +402,9 @@ export const createSharedContentAction = createSafeActionClient()
           name: error.name,
           cause: error.cause
         })
+        return { success: false, error: error.message }
       }
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Failed to create shared content'
-      }
+      return { success: false, error: 'Failed to create shared content' }
     }
   })
 
@@ -327,26 +440,31 @@ export const deleteRsvpAction = createSafeActionClient()
   })
 
 export const deleteRecipeAction = createSafeActionClient()
-  .schema(z.object({
-    id: z.string().min(1, "Recipe ID is required")
-  }))
+  .schema(z.object({ id: z.string() }))
   .action(async (data): Promise<ActionResponse<void>> => {
     try {
-      console.log('Server Action: Starting deleteRecipeAction with input:', data.parsedInput)
+      console.log('Server Action: Starting deleteRecipeAction with id:', data.parsedInput.id)
       
-      // Validate input
-      if (!data.parsedInput.id) {
-        console.error('Server Action: Missing recipe ID:', data.parsedInput)
-        return { success: false, error: 'Recipe ID is required' }
+      // Test database connection
+      console.log('Server Action: Testing database connection...')
+      const isConnected = await testConnection()
+      if (!isConnected) {
+        console.error('Server Action: Database connection failed')
+        return { 
+          success: false, 
+          error: 'Database connection failed. Please check your database configuration and try again.'
+        }
       }
+      console.log('Server Action: Database connection successful')
 
       // Delete recipe from database
+      console.log('Server Action: Deleting recipe from database...')
       await deleteRecipe(data.parsedInput.id)
       console.log('Server Action: Recipe deleted successfully')
 
       return { success: true, data: undefined }
     } catch (error) {
-      console.error('Server Action: Failed to delete recipe:', error)
+      console.error('Server Action: Error in deleteRecipeAction:', error)
       if (error instanceof Error) {
         console.error('Server Action error details:', {
           message: error.message,
@@ -354,10 +472,11 @@ export const deleteRecipeAction = createSafeActionClient()
           name: error.name,
           cause: error.cause
         })
+        return { success: false, error: error.message }
       }
       return { 
         success: false, 
-        error: error instanceof Error ? error.message : 'Failed to delete recipe'
+        error: 'An unexpected error occurred while deleting the recipe. Please try again.'
       }
     }
   })
@@ -575,7 +694,7 @@ export const getRecipesAction = createSafeActionClient()
           console.log('Server Action: Transforming recipe:', recipe)
           
           // Validate required fields
-          if (!recipe.id || !recipe.name || !recipe.fileName || !recipe.fileUrl) {
+          if (!recipe.id || !recipe.name || !recipe.fileName || !recipe.fileData) {
             console.error('Server Action: Recipe missing required fields:', recipe)
             throw new Error('Recipe missing required fields')
           }
@@ -584,8 +703,9 @@ export const getRecipesAction = createSafeActionClient()
             id: recipe.id,
             name: recipe.name,
             fileName: recipe.fileName,
-            fileUrl: recipe.fileUrl,
-            uploadDate: recipe.uploadDate.toISOString()
+            fileData: recipe.fileData,
+            createdAt: recipe.createdAt.toISOString(),
+            updatedAt: recipe.updatedAt.toISOString()
           }
           
           console.log('Server Action: Transformed recipe:', transformed)
@@ -618,18 +738,61 @@ export const getRecipesAction = createSafeActionClient()
 export const getSharedContentAction = createSafeActionClient()
   .action(async (): Promise<ActionResponse<SharedContent[]>> => {
     try {
+      console.log('Server Action: Starting getSharedContentAction')
+      
       const content = await getSharedContent()
-      const transformedContent: SharedContent[] = content.map(item => ({
-        id: item.id,
-        title: item.title,
-        description: item.description || '',
-        fileName: item.fileName,
-        fileUrl: item.fileUrl,
-        uploadDate: item.uploadDate.toISOString()
-      }))
+      console.log('Server Action: Raw content from database:', content)
+      
+      if (!content) {
+        console.error('Server Action: No content returned from database')
+        return { success: false, error: 'No content found in database' }
+      }
+
+      if (!Array.isArray(content)) {
+        console.error('Server Action: Content is not an array:', content)
+        return { success: false, error: 'Invalid content data received from database' }
+      }
+
+      const transformedContent: SharedContent[] = content.map(item => {
+        try {
+          console.log('Server Action: Transforming content:', item)
+          
+          // Validate required fields
+          if (!item.id || !item.title || !item.fileName || !item.fileData) {
+            console.error('Server Action: Content missing required fields:', item)
+            throw new Error('Content missing required fields')
+          }
+
+          const transformed = {
+            id: item.id,
+            title: item.title,
+            description: item.description || '',
+            fileName: item.fileName,
+            fileData: item.fileData,
+            createdAt: item.createdAt.toISOString(),
+            updatedAt: item.updatedAt.toISOString()
+          }
+          
+          console.log('Server Action: Transformed content:', transformed)
+          return transformed
+        } catch (transformError) {
+          console.error('Server Action: Error transforming content:', item, transformError)
+          throw transformError
+        }
+      })
+      
+      console.log('Server Action: Successfully transformed all content:', transformedContent)
       return { success: true, data: transformedContent }
     } catch (error) {
-      console.error('Failed to fetch shared content:', error)
+      console.error('Server Action: Failed to fetch shared content:', error)
+      if (error instanceof Error) {
+        console.error('Server Action error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          cause: error.cause
+        })
+      }
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to fetch shared content'

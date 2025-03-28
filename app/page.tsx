@@ -10,6 +10,7 @@ import { SharedContentUpload } from "@/components/shared-content-upload"
 import type { Event, Rsvp, Recipe, SharedContent } from "@/lib/types"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { createEventAction, createRsvpAction, deleteRsvpAction, getEventsAction, getRsvpsAction, getRecipesAction, getSharedContentAction, createRecipeAction, deleteRecipeAction, createSharedContentAction, deleteSharedContentAction } from '@/app/actions/actions'
+import { testDatabaseConnection } from '@/app/server-test'
 import type { SafeActionResult } from 'next-safe-action'
 import { toast } from "@/components/ui/use-toast"
 
@@ -36,8 +37,16 @@ export default function Home() {
   })
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch initial data
   useEffect(() => {
+    // Test database connection
+    testDatabaseConnection().then(result => {
+      if (!result.success) {
+        console.error('Client: Database connection failed:', result.error)
+        setError(result.error || 'Failed to connect to database')
+      }
+    })
+
+    // Fetch initial data
     const fetchData = async () => {
       try {
         console.log('Client: Starting to fetch data')
@@ -218,21 +227,18 @@ export default function Home() {
 
   const handleAddRecipe = async (recipe: Recipe) => {
     try {
-      const result = await createRecipeAction({
-        name: recipe.name,
-        fileName: recipe.fileName,
-        fileUrl: recipe.fileUrl
+      console.log('Client: Adding recipe to state:', recipe)
+      setRecipes(prevRecipes => {
+        if (prevRecipes.some(r => r.id === recipe.id)) {
+          console.log('Client: Recipe already exists in state:', recipe.id)
+          return prevRecipes
+        }
+        const newRecipes = [...prevRecipes, recipe]
+        console.log('Client: Updated recipes state:', newRecipes)
+        return newRecipes
       })
-
-      if (!result?.data?.success) {
-        console.error('Client: Failed to create recipe:', result?.data)
-        throw new Error('Failed to create recipe')
-      }
-
-      const newRecipe = result.data.data
-      setRecipes(prev => [...prev, newRecipe])
     } catch (error) {
-      console.error('Client: Error creating recipe:', error)
+      console.error('Client: Error adding recipe:', error)
       if (error instanceof Error) {
         console.error('Client error details:', {
           message: error.message,
@@ -241,43 +247,51 @@ export default function Home() {
           cause: error.cause
         })
       }
-      setError(error instanceof Error ? error.message : 'Failed to create recipe')
+      setError(error instanceof Error ? error.message : 'Failed to add recipe')
     }
   }
 
   const handleDeleteRecipe = async (id: string) => {
     try {
-      const result = await deleteRecipeAction({ id }) as ActionResponse<void>
+      console.log('Client: Deleting recipe:', id)
+      const result = await deleteRecipeAction({ id })
+      console.log('Client: Delete recipe result:', result)
 
-      if (!result?.success) {
-        throw new Error('Failed to delete recipe')
+      if (!result?.data?.success) {
+        console.error('Client: Failed to delete recipe:', result?.data?.error)
+        toast({
+          title: "Error",
+          description: result?.data?.error || "Failed to delete recipe",
+          variant: "destructive",
+        })
+        return
       }
 
-      setRecipes(recipes.filter((recipe) => recipe.id !== id))
+      // Update the local state immediately
+      setRecipes(prevRecipes => prevRecipes.filter(recipe => recipe.id !== id))
+      toast({
+        title: "Success",
+        description: "Recipe deleted successfully",
+      })
     } catch (error) {
       console.error("Error deleting recipe:", error)
-      alert("Failed to delete recipe. Please try again.")
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete recipe",
+        variant: "destructive",
+      })
     }
   }
 
   const handleAddSharedContent = async (content: SharedContent) => {
     try {
-      const result = await createSharedContentAction({
-        title: content.title,
-        description: content.description,
-        fileName: content.fileName,
-        fileUrl: content.fileUrl
+      setSharedContent(prev => [...prev, content])
+      toast({
+        title: "Success",
+        description: "Content added successfully",
       })
-
-      if (!result?.data?.success) {
-        console.error('Client: Failed to create shared content:', result?.data)
-        throw new Error('Failed to create shared content')
-      }
-
-      const newContent = result.data.data
-      setSharedContent(prev => [...prev, newContent])
     } catch (error) {
-      console.error('Client: Error creating shared content:', error)
+      console.error('Client: Error adding shared content:', error)
       if (error instanceof Error) {
         console.error('Client error details:', {
           message: error.message,
@@ -286,22 +300,39 @@ export default function Home() {
           cause: error.cause
         })
       }
-      setError(error instanceof Error ? error.message : 'Failed to create shared content')
+      setError(error instanceof Error ? error.message : 'Failed to add shared content')
     }
   }
 
   const handleDeleteSharedContent = async (id: string) => {
     try {
-      const result = await deleteSharedContentAction({ id }) as ActionResponse<void>
+      console.log('Client: Deleting shared content:', id)
+      const result = await deleteSharedContentAction({ id })
+      console.log('Client: Delete shared content result:', result)
 
-      if (!result?.success) {
-        throw new Error('Failed to delete shared content')
+      if (!result?.data?.success) {
+        console.error('Client: Failed to delete shared content:', result?.data)
+        toast({
+          title: "Error",
+          description: "Failed to delete shared content",
+          variant: "destructive",
+        })
+        return
       }
 
-      setSharedContent(sharedContent.filter((content) => content.id !== id))
+      // Update the local state immediately
+      setSharedContent(prevContent => prevContent.filter(content => content.id !== id))
+      toast({
+        title: "Success",
+        description: "Content deleted successfully",
+      })
     } catch (error) {
       console.error("Error deleting shared content:", error)
-      alert("Failed to delete shared content. Please try again.")
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete shared content",
+        variant: "destructive",
+      })
     }
   }
 
