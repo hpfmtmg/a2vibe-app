@@ -132,12 +132,12 @@ export function RsvpForm({
                 </div>
 
                 <div className="space-y-2 md:col-span-1">
-                  <Label htmlFor="content">Additional Content</Label>
+                  <Label htmlFor="content">Tech Content to Share</Label>
                   <Input
                     id="content"
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
-                    placeholder="Any other contributions"
+                    placeholder="Any tech content you'd like to share"
                   />
                 </div>
 

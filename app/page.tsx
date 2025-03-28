@@ -493,7 +493,7 @@ export default function Home() {
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="recipes">Recipes</TabsTrigger>
-          <TabsTrigger value="shared">Content</TabsTrigger>
+          <TabsTrigger value="shared">Tech Content to Share</TabsTrigger>
         </TabsList>
         <TabsContent value="events">
           <div>
